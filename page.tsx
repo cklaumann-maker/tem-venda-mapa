@@ -1,6 +1,5 @@
 "use client";
 import React, { useState } from "react";
-import VendasView from "@/components/vendas/VendasView";
 import { ShieldCheck, Target, CalendarRange, ShoppingBasket, PiggyBank, Users, Heart, Brain, BarChart4, Cog, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,21 +18,16 @@ function Placeholder({title}:{title:string}){
   )
 }
 
-const views = [{ key: "metas", title: "Metas", icon: Target, desc: "Defina o quanto quer vender", component: <MetasView /> },
-  ,
-  { key: "vendas", title: "Vendas", icon: ShoppingBasket, desc: "Acompanhe o movimento da loja", component: <VendasView /> },
-  ,
+const views = [
+  { key: "metas", title: "Metas", icon: Target, desc: "Defina o quanto quer vender", component: <MetasView /> },
   { key: "campanhas", title: "Campanhas", icon: CalendarRange, desc: "Planeje seus momentos de venda", component: <Placeholder title="Campanhas" /> },
-  ,
+  { key: "vendas", title: "Vendas", icon: ShoppingBasket, desc: "Acompanhe o movimento da loja", component: <Placeholder title="Vendas" /> },
   { key: "financeiro", title: "Financeiro", icon: PiggyBank, desc: "Veja se está sobrando dinheiro", component: <Placeholder title="Financeiro" /> },
-  ,
   { key: "equipe", title: "Equipe", icon: Users, desc: "Entenda quem mais vende", component: <Placeholder title="Equipe" /> },
-  ,
   { key: "clientes", title: "Clientes", icon: Heart, desc: "Descubra se estão voltando", component: <Placeholder title="Clientes" /> },
-  ,
   { key: "insights", title: "Insights e Ações", icon: Brain, desc: "Transforme números em decisões", component: <Placeholder title="Insights e Ações" /> },
-  ,
-  { key: "relatorios", title: "Relatórios", icon: BarChart4, desc: "Compare seu crescimento", component: <Placeholder title="Relatórios" /> }];
+  { key: "relatorios", title: "Relatórios", icon: BarChart4, desc: "Compare seu crescimento", component: <Placeholder title="Relatórios" /> },
+];
 
 export default function Page(){
   const [active, setActive] = useState("metas");
@@ -75,7 +69,7 @@ export default function Page(){
         ) : (
           <div className="space-y-4">
             <Button variant="outline" onClick={()=>setActive("home")} className="mb-2">← Voltar</Button>
-            {views.find((v)=>v && v.key===active)?.component}
+            {views.find((v)=>v.key===active)?.component}
           </div>
         )}
       </main>
