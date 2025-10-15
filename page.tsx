@@ -30,7 +30,7 @@ const views = [
 ];
 
 export default function Page(){
-  const [active, setActive] = useState("metas");
+  const [active, setActive] = useState("home");
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 text-gray-900">
