@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ShieldCheck,
   Target,
@@ -11,15 +12,17 @@ import {
   Brain,
   BarChart4,
   Cog,
-  Download
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Tile from "@/components/common/Tile";
-import SectionTitle from "@/components/common/SectionTitle";
-import MetasView from "@/components/metas/MetasView";
-import VendasView from "@/components/vendas/VendasView";
+// import SectionTitle from "@/components/common/SectionTitle"; // não usado aqui
 import { brand } from "@/lib/brand";
+
+// carregamento lazy dos blocos (só quando clicar)
+const MetasView = dynamic(() => import("@/components/metas/MetasView"), { ssr: false });
+const VendasView = dynamic(() => import("@/components/vendas/VendasView"), { ssr: false });
 
 const todayStr = new Date().toLocaleDateString("pt-BR", {
   day: "2-digit",
@@ -37,26 +40,31 @@ function Placeholder({ title }: { title: string }) {
   );
 }
 
-/** Ordem: Metas, Vendas, Campanhas, Financeiro, Equipe, Clientes, Insights e Ações, Relatórios */
+/**
+ * Ordem: Metas, Vendas, Campanhas, Financeiro, Equipe, Clientes, Insights e Ações, Relatórios
+ * Usamos `render: () => <Componente />` para não criar o elemento antes da hora.
+ */
 const views = [
-  { key: "metas",       title: "Metas",            icon: Target,         desc: "Defina o quanto quer vender",                 component: <MetasView /> },
-  { key: "vendas",      title: "Vendas",           icon: ShoppingBasket, desc: "Acompanhe o movimento da loja",               component: <VendasView /> },
-  { key: "campanhas",   title: "Campanhas",        icon: CalendarRange,  desc: "Planeje seus momentos de venda",              component: <Placeholder title="Campanhas" /> },
-  { key: "financeiro",  title: "Financeiro",       icon: PiggyBank,      desc: "Veja se está sobrando dinheiro",             component: <Placeholder title="Financeiro" /> },
-  { key: "equipe",      title: "Equipe",           icon: Users,          desc: "Entenda quem mais vende",                    component: <Placeholder title="Equipe" /> },
-  { key: "clientes",    title: "Clientes",         icon: Heart,          desc: "Descubra se estão voltando",                 component: <Placeholder title="Clientes" /> },
-  { key: "insights",    title: "Insights e Ações", icon: Brain,          desc: "Transforme números em decisões",             component: <Placeholder title="Insights e Ações" /> },
-  { key: "relatorios",  title: "Relatórios",       icon: BarChart4,      desc: "Compare seu crescimento",                    component: <Placeholder title="Relatórios" /> },
+  { key: "metas",       title: "Metas",               icon: Target,         desc: "Defina o quanto quer vender",                 render: () => <MetasView /> },
+  { key: "vendas",      title: "Vendas",              icon: ShoppingBasket, desc: "Acompanhe o movimento da loja",               render: () => <VendasView /> },
+  { key: "campanhas",   title: "Campanhas",           icon: CalendarRange,  desc: "Planeje seus momentos de venda",              render: () => <Placeholder title="Campanhas" /> },
+  { key: "financeiro",  title: "Financeiro",          icon: PiggyBank,      desc: "Veja se está sobrando dinheiro",             render: () => <Placeholder title="Financeiro" /> },
+  { key: "equipe",      title: "Equipe",              icon: Users,          desc: "Entenda quem mais vende",                    render: () => <Placeholder title="Equipe" /> },
+  { key: "clientes",    title: "Clientes",            icon: Heart,          desc: "Descubra se estão voltando",                 render: () => <Placeholder title="Clientes" /> },
+  { key: "insights",    title: "Insights e Ações",    icon: Brain,          desc: "Transforme números em decisões",             render: () => <Placeholder title="Insights e Ações" /> },
+  { key: "relatorios",  title: "Relatórios",          icon: BarChart4,      desc: "Compare seu crescimento",                    render: () => <Placeholder title="Relatórios" /> },
 ];
 
 export default function Page() {
   // estado inicial: home
-  const [active, setActive] = useState<string>(() => "home");
+  const [active, setActive] = useState<string>("home");
 
-  // força "home" no primeiro render, caso algum componente interno tente mudar para "metas"
+  // força "home" no primeiro render (caso algum efeito externo tente mudar)
   useEffect(() => {
     setActive("home");
   }, []);
+
+  const activeView = views.find((v) => v && v.key === active);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 text-gray-900">
@@ -122,7 +130,8 @@ export default function Page() {
             >
               ← Voltar
             </Button>
-            {views.find((v) => v && v.key === active)?.component}
+            {/* render só quando não for home */}
+            {activeView?.render?.()}
           </div>
         )}
       </main>
@@ -130,12 +139,9 @@ export default function Page() {
       <footer className="py-6 text-center text-xs text-muted-foreground">
         Powered by{" "}
         <span className="font-semibold" style={{ color: brand.dark }}>
-          {" "}
           TEM VENDA
         </span>
       </footer>
     </div>
   );
 }
-
-
