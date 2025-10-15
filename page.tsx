@@ -1,20 +1,62 @@
-/**
- * Ordem solicitada:
- * Metas, Vendas, Campanhas, Financeiro, Equipe, Clientes, Insights e Ações, Relatórios
- */
+"use client";
+import React, { useEffect, useState } from "react";
+import {
+  ShieldCheck,
+  Target,
+  CalendarRange,
+  ShoppingBasket,
+  PiggyBank,
+  Users,
+  Heart,
+  Brain,
+  BarChart4,
+  Cog,
+  Download
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import Tile from "@/components/common/Tile";
+import SectionTitle from "@/components/common/SectionTitle";
+import MetasView from "@/components/metas/MetasView";
+import VendasView from "@/components/vendas/VendasView";
+import { brand } from "@/lib/brand";
+
+const todayStr = new Date().toLocaleDateString("pt-BR", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+});
+
+function Placeholder({ title }: { title: string }) {
+  return (
+    <Card className="rounded-2xl">
+      <CardContent className="p-6 text-sm text-muted-foreground">
+        {title} — em breve.
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Ordem: Metas, Vendas, Campanhas, Financeiro, Equipe, Clientes, Insights e Ações, Relatórios */
 const views = [
-  { key: "metas",       title: "Metas",               icon: Target,         desc: "Defina o quanto quer vender",                 component: <MetasView /> },
-  { key: "vendas",      title: "Vendas",              icon: ShoppingBasket, desc: "Acompanhe o movimento da loja",               component: <VendasView /> },
-  { key: "campanhas",   title: "Campanhas",           icon: CalendarRange,  desc: "Planeje seus momentos de venda",              component: <Placeholder title="Campanhas" /> },
-  { key: "financeiro",  title: "Financeiro",          icon: PiggyBank,      desc: "Veja se está sobrando dinheiro",             component: <Placeholder title="Financeiro" /> },
-  { key: "equipe",      title: "Equipe",              icon: Users,          desc: "Entenda quem mais vende",                    component: <Placeholder title="Equipe" /> },
-  { key: "clientes",    title: "Clientes",            icon: Heart,          desc: "Descubra se estão voltando",                 component: <Placeholder title="Clientes" /> },
-  { key: "insights",    title: "Insights e Ações",    icon: Brain,          desc: "Transforme números em decisões",             component: <Placeholder title="Insights e Ações" /> },
-  { key: "relatorios",  title: "Relatórios",          icon: BarChart4,      desc: "Compare seu crescimento",                    component: <Placeholder title="Relatórios" /> },
+  { key: "metas",       title: "Metas",            icon: Target,         desc: "Defina o quanto quer vender",                 component: <MetasView /> },
+  { key: "vendas",      title: "Vendas",           icon: ShoppingBasket, desc: "Acompanhe o movimento da loja",               component: <VendasView /> },
+  { key: "campanhas",   title: "Campanhas",        icon: CalendarRange,  desc: "Planeje seus momentos de venda",              component: <Placeholder title="Campanhas" /> },
+  { key: "financeiro",  title: "Financeiro",       icon: PiggyBank,      desc: "Veja se está sobrando dinheiro",             component: <Placeholder title="Financeiro" /> },
+  { key: "equipe",      title: "Equipe",           icon: Users,          desc: "Entenda quem mais vende",                    component: <Placeholder title="Equipe" /> },
+  { key: "clientes",    title: "Clientes",         icon: Heart,          desc: "Descubra se estão voltando",                 component: <Placeholder title="Clientes" /> },
+  { key: "insights",    title: "Insights e Ações", icon: Brain,          desc: "Transforme números em decisões",             component: <Placeholder title="Insights e Ações" /> },
+  { key: "relatorios",  title: "Relatórios",       icon: BarChart4,      desc: "Compare seu crescimento",                    component: <Placeholder title="Relatórios" /> },
 ];
 
 export default function Page() {
-  const [active, setActive] = useState("home"); // ← abre no menu inicial
+  // estado inicial: home
+  const [active, setActive] = useState<string>(() => "home");
+
+  // força "home" no primeiro render, caso algum componente interno tente mudar para "metas"
+  useEffect(() => {
+    setActive("home");
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 text-gray-900">
@@ -95,4 +137,5 @@ export default function Page() {
     </div>
   );
 }
+
 
