@@ -88,6 +88,9 @@ export default function MetasView() {
   // ---- Visualização (Passo 9)
   const [nivelVisual, setNivelVisual] = useState<'loja'|'cidade'|'estado'>('loja');
 
+  // ---- Step atual
+  const [step, setStep] = useState(7); // ajuste conforme seu fluxo (coloquei 7 para focar no passo solicitado)
+
   // ---- Cálculos principais
   const anosOrdenados = useMemo(()=> [...new Set(historico.map(h=>h.ano))].sort((a,b)=>a-b), [historico]);
   const ultimoAno = anosOrdenados[anosOrdenados.length-1];
@@ -107,16 +110,42 @@ export default function MetasView() {
     return pctByM;
   },[historico, ultimoAno]);
 
+  // ---- AJUSTE MANUAL DE PESOS (PASSO 7)
+  const [pesosMensais, setPesosMensais] = useState<Record<number, number> | null>(null); // % por mês (1..12) ou null para histórico
+  const somaPesosMensais = (w: Record<number, number>) => Object.values(w||{}).reduce((a,b)=>a+(+b||0),0);
+  function initPesosFromHistorico() {
+    const w: Record<number, number> = {};
+    for (let m=1;m<=12;m++) w[m] = +(((partMensalUltAno[m]||0)*100).toFixed(2));
+    setPesosMensais(w);
+  }
+  function equalizarPesos() {
+    const w: Record<number, number> = {};
+    for (let m=1;m<=12;m++) w[m] = +((100/12).toFixed(2));
+    setPesosMensais(w);
+  }
+
   // distribuição mensal (preview) baseada na meta anual do cenário atual
   const metaMensalAtual = useMemo(()=>{
     const map: Record<number, number> = {};
-    for (let m=1;m<=12;m++) map[m] = Math.round((metaAnual||0) * (partMensalUltAno[m]||0));
+
+    if (pesosMensais) {
+      // Usa ajuste manual (% por mês)
+      const totalPct = somaPesosMensais(pesosMensais) || 100;
+      for (let m=1;m<=12;m++){
+        const prop = ((pesosMensais[m]||0) / totalPct);
+        map[m] = Math.round((metaAnual||0) * prop);
+      }
+    } else {
+      // Padrão (histórico)
+      for (let m=1;m<=12;m++) map[m] = Math.round((metaAnual||0) * (partMensalUltAno[m]||0));
+    }
+
+    // acerto de arredondamento
     const soma = Object.values(map).reduce((a,b)=>a+b,0);
-    let diff = (metaAnual||0) - soma;
-    let i=1;
+    let diff = (metaAnual||0) - soma, i=1;
     while (diff!==0 && i<=12) { const k = ((i-1)%12)+1; map[k]+= (diff>0?1:-1); diff += (diff>0?-1:+1); i++; }
     return map;
-  },[metaAnual, partMensalUltAno]);
+  },[metaAnual, partMensalUltAno, pesosMensais]);
 
   // chaves do nível selecionado (para pesos e visualização)
   const chavesNivel = useMemo(()=>{
@@ -201,12 +230,6 @@ export default function MetasView() {
     for (let m=1;m<=12;m++) d[m] = new Date(anoMeta, m, 0).getDate();
     setDiasMes(d);
   }
-
-  // média diária por mês
-  const mediaDia = (m:number)=> {
-    const d = diasMes[m]||0; if (!d) return 0;
-    return Math.round((metaMensalAtual[m]||0)/d);
-  };
 
   // ======= Importação CSV =======
   function importarCSV(file: File) {
@@ -356,6 +379,9 @@ export default function MetasView() {
     setCenarioConfirmado(cenarioEscolhido);
     alert(`Cenário ${cenarioEscolhido} confirmado. Revise no Passo 9 e grave no banco.`);
   }
+
+  // ====== NOVO: toggle para mostrar/ocultar meta diária no Passo 7
+  const [showMetaDia, setShowMetaDia] = useState<boolean>(true);
 
   // ==================== JSX ====================
   return (
@@ -607,26 +633,119 @@ export default function MetasView() {
         </Card>
       </Guard>
 
-      {/* PASSO 7 — Média diária + botão semanas (por mês) */}
+      {/* PASSO 7 — Ajuste mensal + Metas do mês e do dia (com toggle e badge) */}
       <Guard
         ok={Object.keys(diasMes).length>0}
-        msg="Preencha os dias por mês (Passo 5) para ver as médias diárias."
+        msg="Preencha os dias por mês (Passo 5) para ver metas do mês e meta/dia com ajuste de pesos."
       >
         <Card className="rounded-2xl">
           <CardContent className="p-4 space-y-3">
-            <h4 className="font-semibold">7) Distribuição diária (média) — e abertura semanal por mês</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold">7) Ajuste mensal e distribuição diária</h4>
+
+              {/* Toggle mostrar meta/dia */}
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={showMetaDia}
+                  onChange={(e)=>setShowMetaDia(e.target.checked)}
+                />
+                Mostrar meta/dia
+              </label>
+            </div>
+
+            {/* Controles de pesos mensais */}
+            <div className="rounded-xl border p-3 bg-white">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Modo de distribuição:</span>
+                {pesosMensais
+                  ? <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">Manual por mês</span>
+                  : <span className="px-2 py-1 rounded-lg bg-sky-50 text-sky-700">Histórico do último ano</span>
+                }
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {!pesosMensais && (
+                    <Button variant="outline" size="sm" onClick={initPesosFromHistorico}>
+                      Ativar ajuste manual
+                    </Button>
+                  )}
+                  {pesosMensais && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={initPesosFromHistorico}>
+                        Usar histórico
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={equalizarPesos}>
+                        Equalizar
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={()=>setPesosMensais(null)}>
+                        Desativar ajuste
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Badge soma dos pesos com cor */}
+              {pesosMensais && (() => {
+                const soma = somaPesosMensais(pesosMensais);
+                const ok = Math.abs(soma - 100) <= 0.5; // tolerância de 0,5%
+                return (
+                  <div className="text-xs mt-2">
+                    Soma dos pesos:
+                    <span className={`ml-2 px-2 py-0.5 rounded ${ok ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      {soma.toFixed(2)}%
+                    </span>
+                    {!ok && " (ajuste para ficar ~100%)"}
+                  </div>
+                );
+              })()}
+            </div>
+
             <div className="grid md:grid-cols-3 gap-2">
               {/* Quadro Ano */}
               <div className="rounded-xl border p-3 bg-white">
                 <div className="font-medium">Ano</div>
                 <div className="text-sm">Meta anual: <strong>{br(metaAnual)}</strong></div>
-                <div className="text-xs text-muted-foreground">Clique em “Abrir semanas” no mês</div>
+                <div className="text-xs text-muted-foreground">Ajuste a participação mensal para recalcular metas.</div>
               </div>
+
               {Array.from({length:12},(_,i)=>i+1).map(m=>(
                 <div key={m} className="rounded-xl border p-3 bg-white">
                   <div className="font-medium">{meses[m-1]}</div>
-                  <div className="text-xs text-muted-foreground">Dias: {diasMes[m]||'-'}</div>
-                  <div className="text-sm">Meta diária média: <strong>{diasMes[m]? br(mediaDia(m)) : '-'}</strong></div>
+
+                  {/* PESO MENSAL (manual) */}
+                  {pesosMensais ? (
+                    <div className="mt-1">
+                      <div className="text-xs text-muted-foreground">Peso do mês (%)</div>
+                      <Input
+                        type="number"
+                        value={pesosMensais[m] ?? ''}
+                        onChange={(e)=>{
+                          const v = Math.max(0, +e.target.value || 0);
+                          setPesosMensais(prev=>{
+                            const next = { ...(prev||{}) };
+                            next[m] = v;
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Peso histórico: {(partMensalUltAno[m]*100||0).toFixed(2)}%
+                    </div>
+                  )}
+
+                  {/* META DO MÊS & META/DIA */}
+                  <div className="mt-2 text-sm">
+                    <div>Meta do mês: <strong>{br(metaMensalAtual[m]||0)}</strong></div>
+                    {showMetaDia && (
+                      <div className="text-xs text-muted-foreground">
+                        Dias: {diasMes[m]||'-'} • Meta/dia: <strong>{diasMes[m]? br(Math.round((metaMensalAtual[m]||0)/(diasMes[m]||1))) : '-'}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ABRIR SEMANAS */}
                   <div className="mt-2">
                     <Button variant="outline" size="sm" onClick={()=>toggleWeeks7(m)}>Abrir semanas</Button>
                   </div>
@@ -790,3 +909,4 @@ export default function MetasView() {
     </div>
   );
 }
+
