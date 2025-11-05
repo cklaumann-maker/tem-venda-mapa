@@ -89,10 +89,17 @@ export default function LoginForm() {
 
             <Button 
               type="submit" 
-              className="w-full" 
+              className="w-full hover:bg-green-600 transition-colors" 
               disabled={loading}
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Entrando...
+                </div>
+              ) : (
+                "Entrar"
+              )}
             </Button>
           </form>
 

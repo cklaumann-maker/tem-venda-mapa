@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useMemo, useState } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
@@ -106,4 +105,5 @@ export default function MetasView() {
     </MetasWizard>
   );
 }
+
 
