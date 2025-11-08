@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import {
   Download
 } from "lucide-react";
 import { useZApi } from "@/lib/zapi";
+import { useStore } from "@/contexts/StoreContext";
 
 // ==================== Types ====================
 interface Question {
@@ -69,6 +70,7 @@ interface Employee {
 
 // ==================== Component ====================
 export default function EquipeView() {
+  const { isAdmin } = useStore();
   const [activeTab, setActiveTab] = useState<'forms' | 'responses' | 'employees' | 'settings'>('forms');
   const [forms, setForms] = useState<Form[]>([]);
   const [responses, setResponses] = useState<FormResponse[]>([]);
@@ -231,49 +233,6 @@ export default function EquipeView() {
   };
 
   // ==================== Mock Data ====================
-  React.useEffect(() => {
-    // Mock data para demonstração
-    setForms([
-      {
-        id: '1',
-        title: 'Avaliação de Desempenho',
-        description: 'Formulário para avaliação trimestral dos funcionários',
-        questions: [
-          {
-            id: 'q1',
-            type: 'text',
-            title: 'Nome do funcionário',
-            required: true,
-            placeholder: 'Digite seu nome completo'
-          },
-          {
-            id: 'q2',
-            type: 'select',
-            title: 'Como você avalia seu desempenho?',
-            required: true,
-            options: ['Excelente', 'Bom', 'Regular', 'Ruim']
-          },
-          {
-            id: 'q3',
-            type: 'textarea',
-            title: 'Comentários adicionais',
-            required: false,
-            placeholder: 'Deixe seus comentários aqui...'
-          }
-        ],
-        createdBy: 'manager-1',
-        createdAt: new Date().toISOString(),
-        isActive: true
-      }
-    ]);
-
-    setEmployees([
-      { id: '1', name: 'João Silva', email: 'joao@empresa.com', role: 'manager' },
-      { id: '2', name: 'Maria Santos', email: 'maria@empresa.com', role: 'employee' },
-      { id: '3', name: 'Pedro Costa', email: 'pedro@empresa.com', role: 'employee' }
-    ]);
-  }, []);
-
   // ==================== Render Question Editor ====================
   const renderQuestionEditor = (question: Question) => (
     <Card key={question.id} className="mb-4">
@@ -644,7 +603,7 @@ export default function EquipeView() {
       )}
 
       {/* SETTINGS TAB */}
-      {activeTab === 'settings' && (
+      {activeTab === 'settings' && isAdmin && (
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -709,6 +668,15 @@ export default function EquipeView() {
             </CardContent>
           </Card>
         </div>
+      )}
+      {activeTab === 'settings' && !isAdmin && (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-sm text-gray-600">
+              Apenas administradores podem acessar as configurações.
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* FORM RESPONSE MODAL */}
