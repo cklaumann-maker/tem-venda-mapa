@@ -7,6 +7,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 type StoreSummary = {
   id: string;
   name: string;
+  logoUrl?: string | null;
   storeRole?: string | null;
 };
 
@@ -70,12 +71,13 @@ export function StoreProvider({ children }: StoreProviderProps) {
       if (role === "admin") {
         const { data, error } = await supabase
           .from("stores")
-          .select("id, name")
+          .select("id, name, logo_url")
           .order("name", { ascending: true });
         if (error) throw error;
         storeRows = (data ?? []).map((row) => ({
           id: row.id,
           name: row.name,
+          logoUrl: row.logo_url,
           storeRole: "admin",
         }));
       } else {
@@ -91,20 +93,24 @@ export function StoreProvider({ children }: StoreProviderProps) {
         if (storeIds.length > 0) {
           const { data: storesData, error: storesError } = await supabase
             .from("stores")
-            .select("id, name")
+            .select("id, name, logo_url")
             .in("id", storeIds);
           if (storesError) throw storesError;
 
-          const storeMap = new Map<string, string>();
+          const storeMap = new Map<string, { name: string; logoUrl: string | null }>();
           (storesData ?? []).forEach((row) => {
-            storeMap.set(row.id, row.name);
+            storeMap.set(row.id, { name: row.name, logoUrl: row.logo_url });
           });
 
-          storeRows = memberRows.map((row) => ({
-            id: row.store_id,
-            name: storeMap.get(row.store_id) ?? "Loja",
-            storeRole: row.role,
-          }));
+          storeRows = memberRows.map((row) => {
+            const meta = storeMap.get(row.store_id);
+            return {
+              id: row.store_id,
+              name: meta?.name ?? "Loja",
+              logoUrl: meta?.logoUrl ?? null,
+              storeRole: row.role,
+            };
+          });
           storeRows.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
         } else {
           storeRows = [];

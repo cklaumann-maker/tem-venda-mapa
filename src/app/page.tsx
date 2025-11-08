@@ -1,8 +1,9 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import Image from "next/image";
 import {
   ShieldCheck, Target, CalendarRange, ShoppingBasket, PiggyBank, Users,
-  Heart, Brain, BarChart4, Cog, Download, Loader2
+  Heart, Brain, BarChart4, Cog, Download, Loader2, Image as ImageIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +14,9 @@ import UserMenu from "@/components/auth/UserMenu";
 import Logo from "@/components/common/Logo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StoreProvider, useStore } from "@/contexts/StoreContext";
+import { supabaseClient } from "@/lib/supabaseClient";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 // Lazy-load das views para evitar qualquer efeito colateral na montagem da HOME
 const MetasView = dynamic(() => import("@/components/metas/MetasView"), { ssr: false });
@@ -58,9 +62,15 @@ export default function Page() {
 
 function DashboardShell() {
   const router = useRouter();
-  const { loading: storeLoading, stores, currentStore, setCurrentStoreId, isAdmin } = useStore();
-
+  const { loading: storeLoading, stores, currentStore, setCurrentStoreId, isAdmin, refresh } = useStore();
   const [active, setActive] = useState<string>("home");
+  const [showConfigMenu, setShowConfigMenu] = useState(false);
+  const [showLogoModal, setShowLogoModal] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoStoreId, setLogoStoreId] = useState<string>("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const supabase = useMemo(() => supabaseClient(), []);
+  const configMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -73,6 +83,74 @@ function DashboardShell() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (currentStore?.id) setLogoStoreId(currentStore.id);
+  }, [currentStore?.id]);
+
+  useEffect(() => {
+    if (!showConfigMenu) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (configMenuRef.current && !configMenuRef.current.contains(event.target as Node)) {
+        setShowConfigMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showConfigMenu]);
+
+  const storeTitle = currentStore?.name ?? "Sem loja";
+  const canSelectStore = isAdmin || stores.length > 1;
+
+  const handleStepChange = useCallback(
+    (next: string) => {
+      setActive(next);
+      router.replace(next === "home" ? "/" : "/");
+    },
+    [router]
+  );
+
+  const handleLogoConfig = useCallback(() => {
+    if (!isAdmin) return;
+    setShowConfigMenu(false);
+    setShowLogoModal(true);
+  }, [isAdmin]);
+
+  const handleUploadLogo = useCallback(async () => {
+    if (!logoFile || !logoStoreId) {
+      alert("Selecione a empresa e uma imagem antes de salvar.");
+      return;
+    }
+    try {
+      setUploadingLogo(true);
+      const extension = logoFile.name.split(".").pop()?.toLowerCase() || "png";
+      const filePath = `${logoStoreId}/${Date.now()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from("company-logos")
+        .upload(filePath, logoFile, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("company-logos").getPublicUrl(filePath);
+      const publicUrl = urlData?.publicUrl;
+      if (!publicUrl) throw new Error("Não foi possível obter o link público da imagem.");
+      const { error: updateError } = await supabase
+        .from("stores")
+        .update({ logo_url: publicUrl })
+        .eq("id", logoStoreId);
+      if (updateError) throw updateError;
+      await refresh();
+      setShowLogoModal(false);
+      setLogoFile(null);
+      alert("Logo atualizada com sucesso!");
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao atualizar a logo. Verifique o console para detalhes.");
+    } finally {
+      setUploadingLogo(false);
+    }
+  }, [logoFile, logoStoreId, supabase, refresh]);
 
   const allowedKeys = useMemo(() => new Set(["home", ...views.map((v) => v.key)]), []);
 
@@ -128,40 +206,27 @@ function DashboardShell() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 text-gray-900">
-      <header className="sticky top-0 z-10 backdrop-blur bg-white/80 border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between">
-          <div className="flex items-center gap-4 lg:gap-6">
-            <Logo width={120} height={48} className="lg:w-[140px] lg:h-[56px]" />
-            <div className="hidden sm:block">
-              <div className="font-semibold text-base lg:text-lg">Sistema de Gestão Comercial</div>
-              <div className="text-xs lg:text-sm text-muted-foreground">Selecione a loja para visualizar os dados</div>
+      <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-4">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <Logo width={32} height={32} />
+            <div className="w-9 h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden">
+              {currentStore?.logoUrl ? (
+                <Image src={currentStore.logoUrl} alt={storeTitle} width={36} height={36} className="object-cover" />
+              ) : (
+                <span className="text-green-700 font-semibold">{storeTitle[0] ?? "?"}</span>
+              )}
             </div>
-          </div>
-          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-4 w-full md:w-auto">
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <div className="px-3 py-1 bg-green-50 text-green-700 rounded-full font-medium w-full sm:w-auto text-center sm:text-left">
-                {todayStr}
-              </div>
-              <div className="hidden md:flex gap-2">
-                <Button variant="outline" size="sm" className="gap-2 hover:bg-green-50 hover:border-green-200 transition-colors">
-                  <Cog className="w-4 h-4" />Configurações
-                </Button>
-                <Button variant="outline" size="sm" className="gap-2 hover:bg-green-50 hover:border-green-200 transition-colors">
-                  <Download className="w-4 h-4" />Exportar
-                </Button>
-              </div>
-            </div>
-            <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 md:gap-4 w-full md:w-auto">
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">Loja selecionada</div>
-              {stores.length > 1 || isAdmin ? (
+            {canSelectStore ? (
+              <div className="flex items-center gap-2">
                 <Select
-                  value={currentStore.id}
+                  value={currentStore?.id}
                   onValueChange={(value) => {
                     void setCurrentStoreId(value);
                   }}
                 >
-                  <SelectTrigger className="w-full md:w-64 bg-white">
-                    <SelectValue placeholder="Escolha a loja" />
+                  <SelectTrigger className="w-48 bg-white h-9">
+                    <SelectValue placeholder="Selecione a empresa" />
                   </SelectTrigger>
                   <SelectContent>
                     {stores.map((store) => (
@@ -171,16 +236,44 @@ function DashboardShell() {
                     ))}
                   </SelectContent>
                 </Select>
-              ) : (
-                <div className="px-3 py-2 bg-white border rounded-lg text-sm font-medium">
-                  {currentStore.name}
-                </div>
-              )}
-              {storeRoleLabel && (
-                <div className="text-xs text-muted-foreground text-center md:text-left">
-                  Permissão: <span className="font-semibold text-gray-900">{storeRoleLabel}</span>
-                </div>
-              )}
+                {storeRoleLabel && (
+                  <span className="hidden sm:inline text-xs text-muted-foreground">{storeRoleLabel}</span>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold text-gray-900 truncate">{storeTitle}</span>
+                {storeRoleLabel && <span className="text-xs text-muted-foreground">{storeRoleLabel}</span>}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="hidden sm:inline">{todayStr}</span>
+            <div className="hidden md:flex gap-2 items-center" ref={configMenuRef}>
+              <div className="relative">
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setShowConfigMenu((prev) => !prev)}>
+                  <Cog className="w-4 h-4" /> Configurações
+                </Button>
+                {showConfigMenu && (
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl border bg-white shadow-lg z-20 p-2 space-y-2">
+                    {isAdmin ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2"
+                        onClick={handleLogoConfig}
+                      >
+                        <ImageIcon className="w-4 h-4" /> Logos das empresas
+                      </Button>
+                    ) : (
+                      <div className="text-xs text-muted-foreground px-2">Nenhuma configuração disponível.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download className="w-4 h-4" /> Exportar
+              </Button>
             </div>
             <UserMenu />
           </div>
@@ -310,6 +403,55 @@ function DashboardShell() {
           </div>
         </div>
       </footer>
+
+      {showLogoModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <Card className="w-full max-w-lg">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Logo das empresas</h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowLogoModal(false)}>
+                  Fechar
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label>Empresa</Label>
+                <Select value={logoStoreId} onValueChange={setLogoStoreId}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecione a empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Arquivo da logo</Label>
+                <Input
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/heic"
+                  onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                />
+                {logoFile && (
+                  <p className="text-xs text-gray-500">Selecionado: {logoFile.name}</p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setShowLogoModal(false); setLogoFile(null); }}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleUploadLogo} disabled={!logoFile || !logoStoreId || uploadingLogo}>
+                  {uploadingLogo ? "Enviando..." : "Salvar logo"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
