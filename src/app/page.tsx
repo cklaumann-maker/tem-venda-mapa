@@ -25,7 +25,48 @@ const EquipeView = dynamic(() => import("@/components/equipe/EquipeView"), { ssr
 
 // Paleta
 const brand = { primary: "#5ee100", dark: "#373736" };
-const todayStr = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
+const storeBrandingOverrides: Record<
+  string,
+  {
+    primary: string;
+    secondary: string;
+    tagline: string;
+    cover: string | null;
+  }
+> = {
+  teste1: {
+    primary: "#5FA8C4",
+    secondary: "#C53A4A",
+    tagline: "TEM VENDA",
+    cover:
+      "https://ltsbfcnlfpzsbfqwmazx.supabase.co/storage/v1/object/public/company-logos/bc70940d-8995-4669-91a7-94f86b22cf6d/1762636517805.jpg",
+  },
+  teste2: {
+    primary: "#F3C96A",
+    secondary: "#D5574A",
+    tagline: "TEM VENDA",
+    cover:
+      "https://ltsbfcnlfpzsbfqwmazx.supabase.co/storage/v1/object/public/company-logos/63447f3f-0496-4851-8321-fb1bbdc47a55/1762636717822.jpg",
+  },
+};
+
+function hexToRgba(hex: string, alpha = 1) {
+  if (!hex) return `rgba(94, 225, 0, ${alpha})`;
+  let sanitized = hex.replace("#", "");
+  if (sanitized.length === 3) {
+    sanitized = sanitized
+      .split("")
+      .map((char) => char + char)
+      .join("");
+  }
+  if (sanitized.length !== 6) return `rgba(94, 225, 0, ${alpha})`;
+  const bigint = parseInt(sanitized, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 // Placeholder simples para telas ainda não implementadas
 function Placeholder({ title }: { title: string }) {
@@ -69,6 +110,7 @@ function DashboardShell() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoStoreId, setLogoStoreId] = useState<string>("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [dateTimeLabel, setDateTimeLabel] = useState(() => formatDateTime());
   const supabase = useMemo(() => supabaseClient(), []);
   const configMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -98,6 +140,25 @@ function DashboardShell() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showConfigMenu]);
+
+  function formatDateTime() {
+    return new Date().toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setDateTimeLabel(formatDateTime());
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, []);
 
   const storeTitle = currentStore?.name ?? "Sem loja";
   const canSelectStore = isAdmin || stores.length > 1;
@@ -176,6 +237,25 @@ function DashboardShell() {
     ? "Administrador"
     : null;
 
+  const storeKey = currentStore?.name?.trim().toLowerCase() ?? "";
+  const overrideBrand = storeBrandingOverrides[storeKey];
+
+  const primaryColor =
+    overrideBrand?.primary ?? currentStore?.branding?.primaryColor ?? brand.primary;
+  const secondaryColor =
+    overrideBrand?.secondary ?? currentStore?.branding?.secondaryColor ?? "#16a34a";
+  const tagline =
+    overrideBrand?.tagline ?? currentStore?.branding?.tagline ?? "Sistema de Gestão Comercial";
+  const coverImageUrl = overrideBrand?.cover ?? currentStore?.branding?.coverImageUrl ?? null;
+  const supportEmail = overrideBrand ? null : currentStore?.branding?.supportEmail ?? null;
+  const supportPhone = overrideBrand ? null : currentStore?.branding?.supportPhone ?? null;
+
+  const primarySurface = hexToRgba(primaryColor, 0.12);
+  const primaryBorder = hexToRgba(primaryColor, 0.3);
+  const heroBackground = coverImageUrl
+    ? `linear-gradient(0deg, rgba(14, 23, 32, 0.58), rgba(14, 23, 32, 0.58)), url(${coverImageUrl})`
+    : `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`;
+
   if (storeLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-gray-50">
@@ -196,7 +276,11 @@ function DashboardShell() {
           <p className="text-sm text-muted-foreground">
             Não encontramos nenhuma loja vinculada ao seu usuário. Peça ao administrador ou gerente responsável para concluir o cadastro.
           </p>
-          <Button onClick={() => go("home")} className="bg-green-600 hover:bg-green-700 text-white">
+          <Button
+            onClick={() => go("home")}
+            className="text-white hover:opacity-90"
+            style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+          >
             Tentar novamente
           </Button>
         </div>
@@ -209,12 +293,24 @@ function DashboardShell() {
       <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-4">
           <div className="flex items-center gap-3 overflow-hidden">
-            <Logo width={32} height={32} />
-            <div className="w-9 h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden">
+            <button
+              type="button"
+              onClick={() => go("home")}
+              className="focus:outline-none"
+              aria-label="Ir para home"
+            >
+              <Logo width={32} height={32} />
+            </button>
+            <div
+              className="w-9 h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden"
+              style={{ borderColor: primaryBorder }}
+            >
               {currentStore?.logoUrl ? (
                 <Image src={currentStore.logoUrl} alt={storeTitle} width={36} height={36} className="object-cover" />
               ) : (
-                <span className="text-green-700 font-semibold">{storeTitle[0] ?? "?"}</span>
+                <span className="font-semibold" style={{ color: primaryColor }}>
+                  {storeTitle[0] ?? "?"}
+                </span>
               )}
             </div>
             {canSelectStore ? (
@@ -248,7 +344,16 @@ function DashboardShell() {
             )}
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="hidden sm:inline">{todayStr}</span>
+            <span
+              className="px-3 py-1 rounded-full text-sm font-semibold border mx-auto sm:mx-0 whitespace-nowrap"
+              style={{
+                backgroundColor: primarySurface,
+                color: primaryColor,
+                borderColor: primaryBorder,
+              }}
+            >
+              {dateTimeLabel}
+            </span>
             <div className="hidden md:flex gap-2 items-center" ref={configMenuRef}>
               <div className="relative">
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => setShowConfigMenu((prev) => !prev)}>
@@ -283,58 +388,95 @@ function DashboardShell() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {active === "home" ? (
           <>
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold mb-2">Mapa de Estruturação Comercial</h1>
-              <p className="text-base text-muted-foreground mb-6">
-                Clique em um bloco para começar. Interface simples, letras grandes e campos claros.
-              </p>
+            <div
+              className="mb-10 relative overflow-hidden rounded-3xl border shadow-sm px-6 py-8 sm:px-10 sm:py-12 text-white"
+              style={{
+                background: heroBackground,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                borderColor: primaryBorder,
+                boxShadow: `0 20px 45px ${hexToRgba(primaryColor, 0.22)}`,
+              }}
+            >
+              <div className="max-w-3xl space-y-4">
+                <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/90">
+                  {storeTitle}
+                </span>
+                <h1 className="text-3xl sm:text-4xl font-bold leading-tight">{tagline}</h1>
+                <p className="text-base sm:text-lg text-white/85">
+                  Organize metas, acompanhe vendas e impulsione o desempenho da sua empresa em uma única experiência
+                  personalizada.
+                </p>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-white/80">
+                  <span className="inline-flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" />
+                    Acesso seguro e filtrado por loja
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <BarChart4 className="w-4 h-4" />
+                    Insights guiados pelos seus números
+                  </span>
+                </div>
+              </div>
+            </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-green-100 rounded-lg">
-                      <Target className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">R$ 2.4M</div>
-                      <div className="text-sm text-gray-600">Meta Anual</div>
-                    </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+              <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: hexToRgba(primaryColor, 0.15), color: primaryColor }}
+                  >
+                    <Target className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">R$ 2.4M</div>
+                    <div className="text-sm text-gray-600">Meta Anual</div>
                   </div>
                 </div>
+              </div>
 
-                <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-blue-100 rounded-lg">
-                      <ShoppingBasket className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">R$ 1.8M</div>
-                      <div className="text-sm text-gray-600">Realizado</div>
-                    </div>
+              <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: hexToRgba(primaryColor, 0.12), color: primaryColor }}
+                  >
+                    <ShoppingBasket className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">R$ 1.8M</div>
+                    <div className="text-sm text-gray-600">Realizado</div>
                   </div>
                 </div>
+              </div>
 
-                <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-orange-100 rounded-lg">
-                      <BarChart4 className="w-6 h-6 text-orange-600" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">75%</div>
-                      <div className="text-sm text-gray-600">Atingimento</div>
-                    </div>
+              <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: hexToRgba(primaryColor, 0.15), color: primaryColor }}
+                  >
+                    <BarChart4 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">75%</div>
+                    <div className="text-sm text-gray-600">Atingimento</div>
                   </div>
                 </div>
+              </div>
 
-                <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-purple-100 rounded-lg">
-                      <Users className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">12</div>
-                      <div className="text-sm text-gray-600">Lojas Ativas</div>
-                    </div>
+              <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: hexToRgba(primaryColor, 0.12), color: primaryColor }}
+                  >
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">12</div>
+                    <div className="text-sm text-gray-600">Lojas Ativas</div>
                   </div>
                 </div>
               </div>
@@ -345,15 +487,24 @@ function DashboardShell() {
                 <button
                   key={v.key}
                   onClick={() => go(v.key)}
-                  className="group rounded-2xl border-2 border-gray-100 bg-white hover:border-green-200 hover:bg-green-50 transition-all duration-300 shadow-sm hover:shadow-lg p-4 lg:p-6 text-left w-full focus:outline-none focus:ring-4 focus:ring-green-100 transform hover:scale-105"
+                  className="group rounded-2xl bg-white transition-all duration-300 shadow-sm hover:shadow-xl p-4 lg:p-6 text-left w-full focus:outline-none focus:ring-4 transform hover:-translate-y-1"
+                  style={{
+                    border: `2px solid ${primaryBorder}`,
+                    boxShadow: `0 10px 30px ${hexToRgba(primaryColor, 0.14)}`,
+                  }}
                   aria-label={`Abrir ${v.title}`}
                 >
                   <div className="flex items-start gap-3 lg:gap-4">
-                    <div className="p-3 lg:p-4 rounded-xl bg-green-100 group-hover:bg-green-200 transition-colors">
-                      <v.icon className="w-6 h-6 lg:w-8 lg:h-8 text-green-600" />
+                    <div
+                      className="p-3 lg:p-4 rounded-xl transition-colors"
+                      style={{
+                        backgroundColor: hexToRgba(primaryColor, 0.12),
+                      }}
+                    >
+                      <v.icon className="w-6 h-6 lg:w-8 lg:h-8" style={{ color: primaryColor }} />
                     </div>
                     <div className="flex-1">
-                      <div className="text-lg lg:text-xl font-bold text-gray-900 group-hover:text-green-800 transition-colors">
+                      <div className="text-lg lg:text-xl font-bold text-gray-900" style={{ color: primaryColor }}>
                         {v.title}
                       </div>
                       <div className="text-xs lg:text-sm text-gray-600 mt-1">{v.desc}</div>
@@ -381,7 +532,8 @@ function DashboardShell() {
             <Button
               variant="outline"
               onClick={() => go("home")}
-              className="mb-4 hover:bg-green-50 hover:border-green-200 transition-colors"
+              className="mb-4 transition-colors hover:opacity-80"
+              style={{ borderColor: primaryBorder, color: primaryColor }}
             >
               ← Voltar para Home
             </Button>
@@ -390,16 +542,75 @@ function DashboardShell() {
         )}
       </main>
 
-      <footer className="py-8 text-center border-t border-gray-100 bg-white/50">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Logo width={80} height={32} />
-              <span className="text-sm text-muted-foreground">Sistema de Gestão Comercial</span>
+      <footer className="mt-12 border-t border-gray-100 bg-white/60">
+        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-10 justify-between">
+          <div className="flex items-center gap-3">
+            <Logo width={48} height={18} />
+            <div className="flex flex-col leading-tight">
+              <span className="text-sm font-semibold text-gray-900">Sessão ativa</span>
+              <span className="text-sm text-muted-foreground">
+                {storeTitle}
+                {storeRoleLabel ? ` · ${storeRoleLabel}` : ""}
+              </span>
             </div>
-            <div className="text-xs text-muted-foreground">
-              Powered by <span className="font-semibold" style={{ color: brand.dark }}> TEM VENDA</span>
+          </div>
+
+          <div className="w-full lg:w-auto">
+            <h4
+              className="text-xs font-semibold uppercase tracking-wide mb-3 lg:text-center"
+              style={{ color: primaryColor }}
+            >
+              Navegação rápida
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {views.map((view) => (
+                <button
+                  key={view.key}
+                  type="button"
+                  onClick={() => go(view.key)}
+                  className="text-sm text-muted-foreground rounded-full px-4 py-2 border transition-all duration-200 hover:-translate-y-0.5"
+                  style={{
+                    borderColor: primaryBorder,
+                    backgroundColor: hexToRgba(primaryColor, 0.06),
+                    color: "#475569",
+                  }}
+                >
+                  {view.title}
+                </button>
+              ))}
             </div>
+          </div>
+
+          {(supportEmail || supportPhone) && (
+            <div className="w-full lg:w-auto text-sm text-muted-foreground space-y-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: primaryColor }}>
+                Contato da empresa
+              </h4>
+              {supportEmail && (
+                <p>
+                  E-mail:{" "}
+                  <a href={`mailto:${supportEmail}`} className="font-medium" style={{ color: primaryColor }}>
+                    {supportEmail}
+                  </a>
+                </p>
+              )}
+              {supportPhone && (
+                <p>
+                  Telefone:{" "}
+                  <a href={`tel:${supportPhone}`} className="font-medium" style={{ color: primaryColor }}>
+                    {supportPhone}
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="border-t border-gray-100 py-4">
+          <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>© {new Date().getFullYear()} TEM VENDA · Sistema de Gestão Comercial</span>
+            <span>
+              Powered by <span className="font-semibold" style={{ color: brand.dark }}>TEM VENDA</span>
+            </span>
           </div>
         </div>
       </footer>

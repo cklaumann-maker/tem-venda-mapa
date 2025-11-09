@@ -4,11 +4,21 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabaseClient } from "@/lib/supabaseClient";
 
+type StoreBranding = {
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  tagline?: string | null;
+  coverImageUrl?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+};
+
 type StoreSummary = {
   id: string;
   name: string;
   logoUrl?: string | null;
   storeRole?: string | null;
+  branding?: StoreBranding;
 };
 
 type ProfileInfo = {
@@ -71,15 +81,27 @@ export function StoreProvider({ children }: StoreProviderProps) {
       if (role === "admin") {
         const { data, error } = await supabase
           .from("stores")
-          .select("id, name, logo_url")
+          .select(
+            "id, name, logo_url, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
+          )
           .order("name", { ascending: true });
         if (error) throw error;
-        storeRows = (data ?? []).map((row) => ({
-          id: row.id,
-          name: row.name,
-          logoUrl: row.logo_url,
-          storeRole: "admin",
-        }));
+        storeRows = (data ?? []).map((row) => {
+          return {
+            id: row.id,
+            name: row.name,
+            logoUrl: row.logo_url,
+            storeRole: "admin",
+            branding: {
+              primaryColor: row.brand_primary_color,
+              secondaryColor: row.brand_secondary_color,
+              tagline: row.brand_tagline,
+              coverImageUrl: row.brand_cover_url,
+              supportEmail: row.brand_support_email,
+              supportPhone: row.brand_support_phone,
+            },
+          };
+        });
       } else {
         const { data: memberData, error: memberError } = await supabase
           .from("store_members")
@@ -93,13 +115,33 @@ export function StoreProvider({ children }: StoreProviderProps) {
         if (storeIds.length > 0) {
           const { data: storesData, error: storesError } = await supabase
             .from("stores")
-            .select("id, name, logo_url")
+            .select(
+              "id, name, logo_url, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
+            )
             .in("id", storeIds);
           if (storesError) throw storesError;
 
-          const storeMap = new Map<string, { name: string; logoUrl: string | null }>();
+          const storeMap = new Map<
+            string,
+            {
+              name: string;
+              logoUrl: string | null;
+              branding: StoreBranding | undefined;
+            }
+          >();
           (storesData ?? []).forEach((row) => {
-            storeMap.set(row.id, { name: row.name, logoUrl: row.logo_url });
+            storeMap.set(row.id, {
+              name: row.name,
+              logoUrl: row.logo_url,
+              branding: {
+                primaryColor: row.brand_primary_color,
+                secondaryColor: row.brand_secondary_color,
+                tagline: row.brand_tagline,
+                coverImageUrl: row.brand_cover_url,
+                supportEmail: row.brand_support_email,
+                supportPhone: row.brand_support_phone,
+              },
+            });
           });
 
           storeRows = memberRows.map((row) => {
@@ -109,6 +151,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
               name: meta?.name ?? "Loja",
               logoUrl: meta?.logoUrl ?? null,
               storeRole: row.role,
+              branding: meta?.branding,
             };
           });
           storeRows.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
