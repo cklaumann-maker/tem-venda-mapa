@@ -4,7 +4,7 @@ import Link from "next/link";
 import { DashboardPage } from "../page";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Cog, Building2, Users2, PlugZap } from "lucide-react";
+import { ArrowRight, Cog, Building2, LayoutDashboard, Users2, PlugZap } from "lucide-react";
 
 const configOptions = [
   {
@@ -12,6 +12,13 @@ const configOptions = [
     description: "Logos, nomes e status das empresas cadastradas.",
     icon: Building2,
     href: "/configuracoes/empresas",
+    status: "Disponível",
+  },
+  {
+    title: "Página inicial",
+    description: "Personalize os widgets e destaques do painel principal.",
+    icon: LayoutDashboard,
+    href: "/configuracoes/home",
     status: "Disponível",
   },
   {
