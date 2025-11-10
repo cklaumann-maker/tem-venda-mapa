@@ -1,0 +1,100 @@
+"use client";
+
+import Link from "next/link";
+import { DashboardPage } from "../page";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, Cog, Building2, Users2, PlugZap } from "lucide-react";
+
+const configOptions = [
+  {
+    title: "Empresas",
+    description: "Logos, nomes e status das empresas cadastradas.",
+    icon: Building2,
+    href: "/configuracoes/empresas",
+    status: "Disponível",
+  },
+  {
+    title: "Perfis e Acessos",
+    description: "Gerencie papéis, convites e permissões de usuários.",
+    icon: Users2,
+    href: "/configuracoes/acessos",
+    status: "Em construção",
+  },
+  {
+    title: "Integrações",
+    description: "Conecte ERPs, Z-API e outras plataformas parceiras.",
+    icon: PlugZap,
+    href: "/configuracoes/integracoes",
+    status: "Em construção",
+  },
+];
+
+function ConfiguracoesRoot() {
+  return (
+    <div className="max-w-5xl mx-auto space-y-8">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+          <Cog className="w-6 h-6 text-emerald-600" />
+          Central de Configurações
+        </h2>
+        <p className="text-sm text-muted-foreground max-w-3xl">
+          Escolha uma categoria para ajustar informações globais do seu ambiente TEM VENDA. Os itens marcados como
+          &ldquo;Em construção&rdquo; serão disponibilizados em breve.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {configOptions.map((option) => (
+          <Card
+            key={option.title}
+            className="border border-emerald-50 hover:border-emerald-200 transition-colors"
+          >
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <option.icon className="w-8 h-8 text-emerald-600" />
+                <div>
+                  <CardTitle className="text-base text-gray-900">{option.title}</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">{option.description}</p>
+                </div>
+              </div>
+              <span
+                className={`text-xs px-2 py-1 rounded-full border ${
+                  option.status === "Disponível"
+                    ? "text-emerald-600 border-emerald-200 bg-emerald-50"
+                    : "text-amber-600 border-amber-200 bg-amber-50"
+                }`}
+              >
+                {option.status}
+              </span>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline" className="w-full justify-between">
+                <Link href={option.href}>
+                  Abrir {option.title}
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function ConfiguracoesPage() {
+  return (
+    <DashboardPage
+      initialView="configuracoes"
+      extraRoutes={{
+        configuracoes: {
+          title: "Configurações",
+          path: "/configuracoes",
+          component: <ConfiguracoesRoot />,
+        },
+      }}
+    />
+  );
+}
+

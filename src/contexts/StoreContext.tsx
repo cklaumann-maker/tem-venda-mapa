@@ -18,6 +18,7 @@ type StoreSummary = {
   name: string;
   logoUrl?: string | null;
   storeRole?: string | null;
+  isActive?: boolean;
   branding?: StoreBranding;
 };
 
@@ -82,41 +83,44 @@ export function StoreProvider({ children }: StoreProviderProps) {
         const { data, error } = await supabase
           .from("stores")
           .select(
-            "id, name, logo_url, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
+            "id, name, logo_url, is_active, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
           )
           .order("name", { ascending: true });
         if (error) throw error;
-        storeRows = (data ?? []).map((row) => {
-          return {
-            id: row.id,
-            name: row.name,
-            logoUrl: row.logo_url,
-            storeRole: "admin",
-            branding: {
-              primaryColor: row.brand_primary_color,
-              secondaryColor: row.brand_secondary_color,
-              tagline: row.brand_tagline,
-              coverImageUrl: row.brand_cover_url,
-              supportEmail: row.brand_support_email,
-              supportPhone: row.brand_support_phone,
-            },
-          };
-        });
+        storeRows = (data ?? [])
+          .filter((row) => row.is_active ?? true)
+          .map((row) => {
+            return {
+              id: row.id,
+              name: row.name,
+              logoUrl: row.logo_url,
+              storeRole: "admin",
+              isActive: row.is_active ?? true,
+              branding: {
+                primaryColor: row.brand_primary_color,
+                secondaryColor: row.brand_secondary_color,
+                tagline: row.brand_tagline,
+                coverImageUrl: row.brand_cover_url,
+                supportEmail: row.brand_support_email,
+                supportPhone: row.brand_support_phone,
+              },
+            };
+          });
       } else {
         const { data: memberData, error: memberError } = await supabase
           .from("store_members")
-          .select("store_id, role")
+          .select("store_id, role, active")
           .eq("user_id", user.id);
         if (memberError) throw memberError;
 
-        const memberRows = memberData ?? [];
+        const memberRows = (memberData ?? []).filter((row) => row.active ?? true);
         const storeIds = memberRows.map((row) => row.store_id).filter(Boolean);
 
         if (storeIds.length > 0) {
           const { data: storesData, error: storesError } = await supabase
             .from("stores")
             .select(
-              "id, name, logo_url, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
+              "id, name, logo_url, is_active, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
             )
             .in("id", storeIds);
           if (storesError) throw storesError;
@@ -133,6 +137,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
             storeMap.set(row.id, {
               name: row.name,
               logoUrl: row.logo_url,
+              isActive: row.is_active ?? true,
               branding: {
                 primaryColor: row.brand_primary_color,
                 secondaryColor: row.brand_secondary_color,
@@ -144,16 +149,20 @@ export function StoreProvider({ children }: StoreProviderProps) {
             });
           });
 
-          storeRows = memberRows.map((row) => {
-            const meta = storeMap.get(row.store_id);
-            return {
-              id: row.store_id,
-              name: meta?.name ?? "Loja",
-              logoUrl: meta?.logoUrl ?? null,
-              storeRole: row.role,
-              branding: meta?.branding,
-            };
-          });
+          storeRows = memberRows
+            .map((row) => {
+              const meta = storeMap.get(row.store_id);
+              if (!meta?.isActive) return null;
+              return {
+                id: row.store_id,
+                name: meta?.name ?? "Loja",
+                logoUrl: meta?.logoUrl ?? null,
+                storeRole: row.role,
+                isActive: meta?.isActive ?? true,
+                branding: meta?.branding,
+              };
+            })
+            .filter((row): row is StoreSummary => row !== null);
           storeRows.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
         } else {
           storeRows = [];
