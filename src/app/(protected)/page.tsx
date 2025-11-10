@@ -290,6 +290,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       helper: "Meta diária R$ 52.000",
       delta: "+8,4%",
       trend: "up" as const,
+      deltaTooltip: "Comparativo com o mesmo dia da semana passada",
     },
     {
       label: "Ticket médio",
@@ -297,6 +298,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       helper: "Ontem: R$ 68,10",
       delta: "+6,3%",
       trend: "up" as const,
+      deltaTooltip: "Variação em relação ao ticket médio de ontem",
     },
     {
       label: "Clientes atendidos",
@@ -304,6 +306,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       helper: "Meta diária 680 clientes",
       delta: "-5,6%",
       trend: "down" as const,
+      deltaTooltip: "Diferença versus meta diária de clientes",
     },
     {
       label: "Meta mensal",
@@ -311,6 +314,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       helper: "Faltam R$ 120.000 para o objetivo",
       delta: "+12,1%",
       trend: "up" as const,
+      deltaTooltip: "Evolução comparada ao mesmo período do mês anterior",
     },
   ];
 
@@ -630,13 +634,14 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                       </CardTitle>
                       <div className="text-2xl font-semibold text-gray-900 mt-2">{metric.value}</div>
                     </div>
-                    <span
-                      className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
-                        metric.trend === "up"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-rose-100 text-rose-700"
-                      }`}
-                    >
+                <span
+                  className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
+                    metric.trend === "up"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-rose-100 text-rose-700"
+                  }`}
+                  title={metric.deltaTooltip}
+                >
                       {metric.trend === "up" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {metric.delta}
                     </span>
