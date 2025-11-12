@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
 import Image from "next/image";
 import {
   ShieldCheck,
@@ -40,6 +40,23 @@ import { useStore } from "@/contexts/StoreContext";
 const MetasView = dynamic(() => import("@/components/metas/MetasView"), { ssr: false });
 const VendasView = dynamic(() => import("@/components/vendas/VendasView"), { ssr: false });
 const EquipeView = dynamic(() => import("@/components/equipe/EquipeView"), { ssr: false });
+
+type DashboardView = {
+  key: string;
+  title: string;
+  icon: typeof Target;
+  desc: string;
+  component: ReactNode;
+  preload?: () => Promise<void>;
+};
+
+function preloadComponent(component: unknown): Promise<void> {
+  const maybe = component as { preload?: () => Promise<unknown> } | null | undefined;
+  if (maybe && typeof maybe.preload === "function") {
+    return Promise.resolve(maybe.preload()).then(() => undefined);
+  }
+  return Promise.resolve();
+}
 
 // Paleta
 const brand = { primary: "#16a34a", dark: "#14532d" };
@@ -130,12 +147,33 @@ type ExtraRoute = {
 };
 
 // Definição das views
-const views = [
-  { key: "metas", title: "Metas", icon: Target, desc: "Defina o quanto quer vender", component: <MetasView /> },
-  { key: "vendas", title: "Vendas", icon: ShoppingBasket, desc: "Acompanhe o movimento da loja", component: <VendasView /> },
+const views: DashboardView[] = [
+  {
+    key: "metas",
+    title: "Metas",
+    icon: Target,
+    desc: "Defina o quanto quer vender",
+    component: <MetasView />,
+    preload: () => preloadComponent(MetasView),
+  },
+  {
+    key: "vendas",
+    title: "Vendas",
+    icon: ShoppingBasket,
+    desc: "Acompanhe o movimento da loja",
+    component: <VendasView />,
+    preload: () => preloadComponent(VendasView),
+  },
   { key: "campanhas", title: "Campanhas", icon: CalendarRange, desc: "Planeje seus momentos de venda", component: <Placeholder title="Campanhas" /> },
   { key: "financeiro", title: "Financeiro", icon: PiggyBank, desc: "Veja se está sobrando dinheiro", component: <Placeholder title="Financeiro" /> },
-  { key: "equipe", title: "Equipe", icon: Users, desc: "Sistema de formulários e gestão", component: <EquipeView /> },
+  {
+    key: "equipe",
+    title: "Equipe",
+    icon: Users,
+    desc: "Sistema de formulários e gestão",
+    component: <EquipeView />,
+    preload: () => preloadComponent(EquipeView),
+  },
   { key: "clientes", title: "Clientes", icon: Heart, desc: "Descubra se estão voltando", component: <Placeholder title="Clientes" /> },
   { key: "insights", title: "Insights e Ações", icon: Brain, desc: "Transforme números em decisões", component: <Placeholder title="Insights e Ações" /> },
   { key: "relatorios", title: "Relatórios", icon: BarChart4, desc: "Compare seu crescimento", component: <Placeholder title="Relatórios" /> },
@@ -164,6 +202,8 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
   const pathname = usePathname();
   const { loading: storeLoading, stores, currentStore, setCurrentStoreId, isAdmin } = useStore();
   const [active, setActive] = useState<string>(initialView);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
   const [dateTimeLabel, setDateTimeLabel] = useState(() => formatDateTime());
 
   const viewRoutes = useMemo(() => {
@@ -190,6 +230,26 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
     return baseRoutes;
   }, [extraRoutes]);
 
+  const viewMap = useMemo(() => {
+    const map = new Map<string, DashboardView>();
+    views.forEach((view) => {
+      map.set(view.key, view);
+    });
+    return map;
+  }, []);
+
+  const completeNavigation = useCallback(() => {
+    setIsNavigating(false);
+    setPendingRoute(null);
+    document.body.style.cursor = "";
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = "";
+    };
+  }, []);
+
   useEffect(() => {
     const matchEntry = Object.entries(viewRoutes).find(([, path]) => path === pathname);
     if (matchEntry) {
@@ -198,6 +258,12 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       setActive(initialView);
     }
   }, [pathname, initialView, viewRoutes]);
+
+  useEffect(() => {
+    if (pendingRoute && pathname === pendingRoute) {
+      completeNavigation();
+    }
+  }, [pathname, pendingRoute, completeNavigation]);
 
   function formatDateTime() {
     return new Date().toLocaleString("pt-BR", {
@@ -229,16 +295,48 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
     return keys;
   }, [extraRoutes]);
 
+  const navigateToKey = useCallback(
+    async (key: string) => {
+      const k = allowedKeys.has(key) ? key : "home";
+      const targetRoute = viewRoutes[k as keyof typeof viewRoutes];
+
+      if (k === active && (!targetRoute || targetRoute === pathname)) {
+        return;
+      }
+
+      if (pendingRoute && targetRoute && pendingRoute === targetRoute) {
+        return;
+      }
+
+      setIsNavigating(true);
+      document.body.style.cursor = "progress";
+
+      const targetView = viewMap.get(k);
+      if (targetView?.preload) {
+        try {
+          await targetView.preload();
+        } catch (error) {
+          console.error("Erro ao pré-carregar view:", error);
+        }
+      }
+
+      if (!targetRoute || targetRoute === pathname) {
+        setActive(k);
+        completeNavigation();
+        return;
+      }
+
+      setPendingRoute(targetRoute);
+      router.push(targetRoute);
+    },
+    [allowedKeys, viewRoutes, viewMap, pathname, router, completeNavigation, active, pendingRoute]
+  );
+
   const go = useCallback(
     (key: string) => {
-      const k = allowedKeys.has(key) ? key : "home";
-      setActive(k);
-      const targetRoute = viewRoutes[k as keyof typeof viewRoutes];
-      if (targetRoute && pathname !== targetRoute) {
-        router.push(targetRoute);
-      }
+      void navigateToKey(key);
     },
-    [allowedKeys, viewRoutes, pathname, router]
+    [navigateToKey]
   );
 
   const storeRoleLabel = currentStore?.storeRole
@@ -409,10 +507,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
   if (storeLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-gray-50">
-        <div className="flex flex-col items-center gap-3 p-8 rounded-2xl border bg-white shadow-sm">
-          <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
-          <p className="text-sm text-muted-foreground">Carregando lojas disponíveis...</p>
-        </div>
+        <Loader2 className="w-8 h-8 text-green-600 animate-spin" aria-label="Carregando" />
       </div>
     );
   }
@@ -450,17 +545,32 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 text-gray-900">
+      <div
+        className={`fixed inset-0 z-40 pointer-events-none transition-opacity duration-200 ease-out ${isNavigating ? "opacity-80" : "opacity-0"}`}
+        style={{ backgroundColor: "rgba(255, 255, 255, 0.6)" }}
+        aria-hidden="true"
+      />
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-4">
           <div className="flex items-center gap-3 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => go("home")}
-              className="focus:outline-none"
-              aria-label="Ir para home"
+            <Link
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                go("home");
+              }}
+              className="group flex items-center gap-2 rounded-md px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
+              aria-label="Ir para a página inicial"
+              title="Ir para a página inicial"
             >
-              <Logo width={32} height={32} />
-            </button>
+              <Logo width={36} height={36} className="transition-transform duration-200 group-hover:scale-105" />
+              <div className="hidden sm:flex flex-col leading-tight">
+                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: primaryColor }}>
+                  Tem Venda
+                </span>
+                <span className="text-sm font-semibold text-slate-900">Página inicial</span>
+              </div>
+            </Link>
             <div
               className="w-9 h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden"
               style={{ borderColor: primaryBorder }}
@@ -579,30 +689,12 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                 )
               )}
               <div className="relative z-10 flex flex-col gap-6 p-8 lg:flex-row lg:items-center lg:justify-between">
-                <div className="space-y-4 max-w-xl bg-white/80 rounded-2xl p-6 shadow-sm backdrop-blur">
-              <h1 className="text-3xl lg:text-4xl font-bold leading-tight flex items-center gap-3 text-slate-900">
-                <Sparkles className="w-6 h-6 text-emerald-600" />
-                    {greetingMessage}
-                  </h1>
-              <p className="text-sm lg:text-base text-slate-900/80">
-                    Última atualização em <span className="font-semibold">{dateTimeLabel}</span>. Acompanhe indicadores
-                    críticos, alertas e ative rapidamente as iniciativas do dia.
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    <Button
-                      asChild
-                      className="hover:opacity-95 border"
-                      style={{
-                        backgroundColor: heroTextColor,
-                        color: heroPrimaryColor,
-                        borderColor: hexToRgba(heroPrimaryColor, 0.45),
-                      }}
-                    >
-                      <Link href="/metas">
-                        Planejar metas
-                        <ArrowUpRight className="w-4 h-4 ml-2" />
-                      </Link>
-                    </Button>
+                <div className="flex-1">
+                  <div className="inline-flex w-full max-w-xl bg-white/80 rounded-2xl p-6 shadow-sm backdrop-blur">
+                    <h1 className="text-3xl lg:text-4xl font-bold leading-tight flex items-center gap-3 text-slate-900">
+                      <Sparkles className="w-6 h-6 text-emerald-600" />
+                      {greetingMessage}
+                    </h1>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 rounded-2xl p-4 shadow-inner backdrop-blur bg-white/85 text-slate-900">
@@ -719,7 +811,13 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                         variant="ghost"
                         className="w-full justify-start gap-2 text-sm hover:bg-emerald-50 hover:text-emerald-700"
                       >
-                        <Link href={targetRoute}>
+                        <Link
+                          href={targetRoute}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            go(view.key);
+                          }}
+                        >
                           <view.icon className="w-4 h-4" />
                           {view.title}
                           <ArrowUpRight className="w-4 h-4 ml-auto opacity-60" />
@@ -788,7 +886,13 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                     </div>
                   </div>
                   <Button asChild variant="outline" className="w-full">
-                    <Link href="/equipe">
+                    <Link
+                      href="/equipe"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        go("equipe");
+                      }}
+                    >
                       Ver escala completa
                       <ArrowUpRight className="w-4 h-4 ml-2" />
                     </Link>
@@ -813,7 +917,15 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
               className="mb-4 transition-colors hover:opacity-80"
               style={{ borderColor: primaryBorder, color: primaryColor }}
             >
-              <Link href={backHref}>
+              <Link
+                href={backHref}
+                onClick={(event) => {
+                  event.preventDefault();
+                  const match = Object.entries(viewRoutes).find(([, path]) => path === backHref);
+                  const targetKey = match ? match[0] : "home";
+                  go(targetKey);
+                }}
+              >
                 ← Voltar
               </Link>
             </Button>
