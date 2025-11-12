@@ -74,6 +74,7 @@ function preloadComponent(component: unknown): Promise<void> {
   return Promise.resolve();
 }
 
+
 type TasksPanelProps = {
   isAdmin: boolean;
   stores: { id: string; name: string }[];
@@ -741,6 +742,30 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
     ? `linear-gradient(0deg, rgba(14, 23, 32, 0.58), rgba(14, 23, 32, 0.58)), url(${coverImageUrl})`
     : heroGradient;
 
+  const heroSummary = [
+    {
+      label: "Meta mensal",
+      value: "R$ 2,4M",
+      helper: "+12% vs. ano passado",
+      icon: TrendingUp,
+      accent: "emerald" as const,
+    },
+    {
+      label: "Meta da semana",
+      value: "R$ 580 mil",
+      helper: "Faltam 3 dias úteis",
+      icon: Clock,
+      accent: "sky" as const,
+    },
+    {
+      label: "Meta diária",
+      value: "82% atingido",
+      helper: "R$ 48,2 mil de R$ 58,5 mil",
+      icon: Activity,
+      accent: "amber" as const,
+    },
+  ];
+
   const metrics = [
     {
       label: "Vendas de hoje",
@@ -1048,13 +1073,36 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                   </>
                 )
               )}
-              <div className="relative z-10 flex flex-col gap-6 p-8 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex-1 space-y-4">
-                  <div className="inline-flex w-full max-w-xl bg-white/80 rounded-2xl p-6 shadow-sm backdrop-blur">
-                    <h1 className="text-3xl lg:text-4xl font-bold leading-tight flex items-center gap-3 text-slate-900">
-                      <Sparkles className="w-6 h-6 text-emerald-600" />
-                      {greetingMessage}
-                    </h1>
+              <div className="relative z-10 flex flex-col gap-5 p-8">
+                <div className="inline-flex w-full max-w-xl items-center rounded-2xl bg-white/80 p-6 shadow-sm backdrop-blur">
+                  <h1 className="text-3xl lg:text-4xl font-bold leading-tight flex items-center gap-3 text-slate-900">
+                    <Sparkles className="w-6 h-6 text-emerald-600" />
+                    {greetingMessage}
+                  </h1>
+                </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {heroSummary.map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-2xl border border-white/60 bg-white/85 backdrop-blur px-4 py-3 shadow-sm flex flex-col gap-1"
+                      >
+                        <span className="text-xs uppercase tracking-wide text-slate-500">{item.label}</span>
+                        <span className="text-xl font-semibold text-slate-900">{item.value}</span>
+                        <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                          <item.icon
+                            className={`w-3 h-3 ${
+                              item.accent === "emerald"
+                                ? "text-emerald-500"
+                                : item.accent === "sky"
+                                ? "text-sky-500"
+                                : "text-amber-500"
+                            }`}
+                          />
+                          {item.helper}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                   <TasksPanel
                     isAdmin={isAdmin}
@@ -1072,22 +1120,6 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                     onDeleteTask={handleDeleteTask}
                     currentStoreName={storeTitle}
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-4 rounded-2xl p-4 shadow-inner backdrop-blur bg-white/85 text-slate-900">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Meta mensal</p>
-                    <p className="text-2xl font-semibold text-slate-900">R$ 2,4M</p>
-                    <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-                      <TrendingUp className="w-3 h-3 text-emerald-500" /> +12% vs. ano passado
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Meta da semana</p>
-                    <p className="text-2xl font-semibold text-slate-900">R$ 580 mil</p>
-                    <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-                      <Clock className="w-3 h-3 text-emerald-500" /> Faltam 3 dias úteis
-                    </span>
-                  </div>
                 </div>
               </div>
             </section>
