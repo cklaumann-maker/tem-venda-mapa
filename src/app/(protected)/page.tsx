@@ -25,6 +25,9 @@ import {
   PackageSearch,
   Sparkles,
   CheckCircle2,
+  ListTodo,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -35,6 +38,9 @@ import UserMenu from "@/components/auth/UserMenu";
 import Logo from "@/components/common/Logo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/contexts/StoreContext";
+import { supabaseClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/hooks/useAuth";
+import { Input } from "@/components/ui/input";
 
 // Lazy-load das views para evitar qualquer efeito colateral na montagem da HOME
 const MetasView = dynamic(() => import("@/components/metas/MetasView"), { ssr: false });
@@ -50,12 +56,199 @@ type DashboardView = {
   preload?: () => Promise<void>;
 };
 
+type StoreTaskRecord = {
+  id: string;
+  store_id: string;
+  title: string;
+  completed: boolean;
+  created_at: string;
+};
+
 function preloadComponent(component: unknown): Promise<void> {
   const maybe = component as { preload?: () => Promise<unknown> } | null | undefined;
   if (maybe && typeof maybe.preload === "function") {
     return Promise.resolve(maybe.preload()).then(() => undefined);
   }
   return Promise.resolve();
+}
+
+type TasksPanelProps = {
+  isAdmin: boolean;
+  stores: { id: string; name: string }[];
+  selectedStoreId: string | null;
+  onStoreChange: (storeId: string) => void;
+  tasks: StoreTaskRecord[];
+  loading: boolean;
+  saving: boolean;
+  completingId: string | null;
+  deletingId: string | null;
+  error: string | null;
+  onAddTask: (title: string) => Promise<boolean>;
+  onCompleteTask: (taskId: string) => Promise<boolean>;
+  onDeleteTask: (taskId: string) => Promise<boolean>;
+  currentStoreName: string | null;
+};
+
+function TasksPanel({
+  isAdmin,
+  stores,
+  selectedStoreId,
+  onStoreChange,
+  tasks,
+  loading,
+  saving,
+  completingId,
+  deletingId,
+  error,
+  onAddTask,
+  onCompleteTask,
+  onDeleteTask,
+  currentStoreName,
+}: TasksPanelProps) {
+  const [newTask, setNewTask] = useState("");
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const value = newTask.trim();
+      if (!value || saving || !selectedStoreId) return;
+      const success = await onAddTask(value);
+      if (success) {
+        setNewTask("");
+      }
+    },
+    [newTask, onAddTask, saving, selectedStoreId]
+  );
+
+  const hasStores = isAdmin ? stores.length > 0 : !!selectedStoreId;
+
+  return (
+    <Card className="bg-white/85 backdrop-blur border border-white/60 shadow-sm">
+      <CardHeader className="pb-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-center gap-2">
+              <ListTodo className="w-4 h-4 text-emerald-600" />
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">Tarefas pendentes</CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Registre pendências críticas e acompanhe a execução pelo time.
+                </CardDescription>
+              </div>
+            </div>
+            {isAdmin ? (
+              <Select
+                value={selectedStoreId ?? ""}
+                onValueChange={(value) => {
+                  onStoreChange(value);
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-56 h-9 bg-white/80" disabled={stores.length === 0}>
+                  <SelectValue placeholder="Selecione a empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {currentStoreName ?? "Sem loja selecionada"}
+              </span>
+            )}
+          </div>
+          {!hasStores && (
+            <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Nenhuma empresa disponível para atribuir tarefas.
+            </div>
+          )}
+          {error ? (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!selectedStoreId ? (
+          <p className="text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg px-3 py-4 text-center">
+            {isAdmin
+              ? "Selecione uma empresa para visualizar e registrar tarefas."
+              : "Selecione uma loja para acompanhar as tarefas do dia."}
+          </p>
+        ) : (
+          <>
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Carregando tarefas...
+              </div>
+            ) : tasks.length === 0 ? (
+              <div className="text-sm text-slate-600 border border-dashed border-emerald-200 rounded-lg px-4 py-5 bg-white/70 text-center">
+                Nenhuma tarefa pendente. Registre a próxima iniciativa da equipe.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {tasks.map((task) => (
+                  <li key={task.id} className="flex items-start justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-3 py-2 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          void onCompleteTask(task.id);
+                        }}
+                        disabled={completingId === task.id || deletingId === task.id}
+                        className="mt-0.5 text-emerald-600 hover:text-emerald-700"
+                        aria-label="Concluir tarefa"
+                      >
+                        {completingId === task.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4" />
+                        )}
+                      </Button>
+                      <div className="flex-1 text-sm text-slate-700 leading-snug pt-1">{task.title}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        void onDeleteTask(task.id);
+                      }}
+                      disabled={deletingId === task.id || completingId === task.id}
+                      className="mt-0.5 text-rose-600 hover:text-rose-700"
+                      aria-label="Excluir tarefa"
+                    >
+                      {deletingId === task.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Input
+                value={newTask}
+                onChange={(event) => setNewTask(event.target.value)}
+                placeholder="Adicionar nova tarefa para hoje"
+                disabled={saving || !selectedStoreId}
+              />
+              <Button type="submit" disabled={saving || !selectedStoreId || !newTask.trim()} className="sm:w-auto">
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                Adicionar
+              </Button>
+            </form>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 // Paleta
@@ -200,11 +393,20 @@ type DashboardShellProps = {
 function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useAuth();
   const { loading: storeLoading, stores, currentStore, setCurrentStoreId, isAdmin } = useStore();
+  const supabase = useMemo(() => supabaseClient(), []);
   const [active, setActive] = useState<string>(initialView);
   const [isNavigating, setIsNavigating] = useState(false);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null);
   const [dateTimeLabel, setDateTimeLabel] = useState(() => formatDateTime());
+  const [tasksStoreId, setTasksStoreId] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<StoreTaskRecord[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
   const viewRoutes = useMemo(() => {
     const baseRoutes: Record<string, string> = {
@@ -237,6 +439,27 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
     });
     return map;
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setTasksStoreId(currentStore?.id ?? null);
+    }
+  }, [isAdmin, currentStore?.id]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      if (!tasksStoreId) {
+        const fallback = currentStore?.id ?? stores[0]?.id ?? null;
+        if (fallback && fallback !== tasksStoreId) {
+          setTasksStoreId(fallback);
+        }
+      }
+    }
+  }, [isAdmin, currentStore?.id, stores, tasksStoreId]);
+
+  useEffect(() => {
+    setTasksError(null);
+  }, [tasksStoreId]);
 
   const completeNavigation = useCallback(() => {
     setIsNavigating(false);
@@ -294,6 +517,119 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
     }
     return keys;
   }, [extraRoutes]);
+
+  const fetchTasks = useCallback(
+    async (storeId: string) => {
+      setTasksLoading(true);
+      setTasksError(null);
+      try {
+        const { data, error } = await supabase
+          .from("store_tasks")
+          .select("id, store_id, title, completed, created_at")
+          .eq("store_id", storeId)
+          .eq("completed", false)
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+        const rows = (data ?? []) as StoreTaskRecord[];
+        setTasks(rows);
+      } catch (error) {
+        console.error("Erro ao carregar tarefas:", error);
+        setTasks([]);
+        setTasksError("Não foi possível carregar as tarefas pendentes.");
+      } finally {
+        setTasksLoading(false);
+      }
+    },
+    [supabase]
+  );
+
+  useEffect(() => {
+    if (!tasksStoreId) {
+      setTasks([]);
+      return;
+    }
+    void fetchTasks(tasksStoreId);
+  }, [tasksStoreId, fetchTasks]);
+
+  const handleAddTask = useCallback(
+    async (title: string) => {
+      const storeId = tasksStoreId;
+      const trimmed = title.trim();
+      if (!storeId || !trimmed) return false;
+      setTaskSaving(true);
+      setTasksError(null);
+      try {
+        const { data, error } = await supabase
+          .from("store_tasks")
+          .insert({
+            store_id: storeId,
+            title: trimmed,
+            completed: false,
+            created_by: user?.id ?? null,
+          })
+          .select("id, store_id, title, completed, created_at")
+          .single<StoreTaskRecord>();
+        if (error) throw error;
+        const inserted = data as StoreTaskRecord;
+        setTasks((prev) =>
+          [...prev, inserted].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          )
+        );
+        return true;
+      } catch (error) {
+        console.error("Erro ao adicionar tarefa:", error);
+        setTasksError("Não foi possível adicionar a tarefa. Tente novamente.");
+        return false;
+      } finally {
+        setTaskSaving(false);
+      }
+    },
+    [supabase, tasksStoreId, user?.id]
+  );
+
+  const handleCompleteTask = useCallback(
+    async (taskId: string) => {
+      setCompletingTaskId(taskId);
+      setTasksError(null);
+      try {
+        const { error } = await supabase
+          .from("store_tasks")
+          .update({ completed: true })
+          .eq("id", taskId);
+        if (error) throw error;
+        setTasks((prev) => prev.filter((task) => task.id !== taskId));
+        return true;
+      } catch (error) {
+        console.error("Erro ao concluir tarefa:", error);
+        setTasksError("Não foi possível concluir a tarefa. Tente novamente.");
+        return false;
+      } finally {
+        setCompletingTaskId(null);
+      }
+    },
+    [supabase]
+  );
+
+  const handleDeleteTask = useCallback(
+    async (taskId: string) => {
+      setDeletingTaskId(taskId);
+      setTasksError(null);
+      try {
+        const { error } = await supabase.from("store_tasks").delete().eq("id", taskId);
+        if (error) throw error;
+        setTasks((prev) => prev.filter((task) => task.id !== taskId));
+        return true;
+      } catch (error) {
+        console.error("Erro ao excluir tarefa:", error);
+        setTasksError("Não foi possível excluir a tarefa. Tente novamente.");
+        return false;
+      } finally {
+        setDeletingTaskId(null);
+      }
+    },
+    [supabase]
+  );
 
   const navigateToKey = useCallback(
     async (key: string) => {
@@ -688,14 +1024,30 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                   </>
                 )
               )}
-              <div className="relative z-10 flex flex-col gap-6 p-8 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex-1">
+              <div className="relative z-10 flex flex-col gap-6 p-8 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex-1 space-y-4">
                   <div className="inline-flex w-full max-w-xl bg-white/80 rounded-2xl p-6 shadow-sm backdrop-blur">
                     <h1 className="text-3xl lg:text-4xl font-bold leading-tight flex items-center gap-3 text-slate-900">
                       <Sparkles className="w-6 h-6 text-emerald-600" />
                       {greetingMessage}
                     </h1>
                   </div>
+                  <TasksPanel
+                    isAdmin={isAdmin}
+                    stores={stores}
+                    selectedStoreId={tasksStoreId}
+                    onStoreChange={setTasksStoreId}
+                    tasks={tasks}
+                    loading={tasksLoading}
+                    saving={taskSaving}
+                    completingId={completingTaskId}
+                    deletingId={deletingTaskId}
+                    error={tasksError}
+                    onAddTask={handleAddTask}
+                    onCompleteTask={handleCompleteTask}
+                    onDeleteTask={handleDeleteTask}
+                    currentStoreName={storeTitle}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4 rounded-2xl p-4 shadow-inner backdrop-blur bg-white/85 text-slate-900">
                   <div>
