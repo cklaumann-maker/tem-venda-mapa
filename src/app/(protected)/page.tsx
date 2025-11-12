@@ -62,6 +62,8 @@ type StoreTaskRecord = {
   title: string;
   completed: boolean;
   created_at: string;
+  created_by: string | null;
+  created_by_email: string | null;
 };
 
 function preloadComponent(component: unknown): Promise<void> {
@@ -209,7 +211,28 @@ function TasksPanel({
                           <CheckCircle2 className="w-4 h-4" />
                         )}
                       </Button>
-                      <div className="flex-1 text-sm text-slate-700 leading-snug pt-1">{task.title}</div>
+                      <div className="flex-1 text-sm text-slate-700 leading-snug pt-1">
+                        <div>{task.title}</div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {(() => {
+                            const createdDate = new Date(task.created_at);
+                            const createdLabel = Number.isNaN(createdDate.getTime())
+                              ? null
+                              : createdDate.toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                });
+                            const creator = task.created_by_email ?? null;
+                            if (!createdLabel && !creator) return "Criada recentemente";
+                            if (createdLabel && creator) return `Criada em ${createdLabel} por ${creator}`;
+                            if (createdLabel) return `Criada em ${createdLabel}`;
+                            return `Criada por ${creator}`;
+                          })()}
+                        </div>
+                      </div>
                     </div>
                     <Button
                       type="button"
@@ -525,7 +548,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       try {
         const { data, error } = await supabase
           .from("store_tasks")
-          .select("id, store_id, title, completed, created_at")
+          .select("id, store_id, title, completed, created_at, created_by, created_by_email")
           .eq("store_id", storeId)
           .eq("completed", false)
           .order("created_at", { ascending: true });
@@ -566,8 +589,9 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
             title: trimmed,
             completed: false,
             created_by: user?.id ?? null,
+            created_by_email: user?.email ?? null,
           })
-          .select("id, store_id, title, completed, created_at")
+          .select("id, store_id, title, completed, created_at, created_by, created_by_email")
           .single<StoreTaskRecord>();
         if (error) throw error;
         const inserted = data as StoreTaskRecord;
