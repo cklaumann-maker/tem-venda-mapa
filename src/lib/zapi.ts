@@ -16,7 +16,7 @@ interface ZApiFormNotificationData {
 
 // ==================== Z-API Service ====================
 export class ZApiService {
-  async sendMessage(message: ZApiMessage): Promise<boolean> {
+  async sendMessage(message: ZApiMessage, config?: { instanceId?: string; token?: string; clientToken?: string }): Promise<boolean> {
     try {
       console.log('🚀 Enviando mensagem via Z-API (API Route)...');
       console.log('Body:', {
@@ -24,15 +24,27 @@ export class ZApiService {
         message: message.message.substring(0, 50) + '...'
       });
 
+      const body: any = {
+        phone: message.phone,
+        message: message.message
+      };
+
+      // Adiciona configuração se fornecida
+      if (config) {
+        if (config.instanceId) body.instanceId = config.instanceId;
+        if (config.token) body.token = config.token;
+        if (config.clientToken) {
+          body.clientToken = config.clientToken;
+          // Nunca logar o client-token - ele é um dado sensível
+        }
+      }
+
       const response = await fetch('/api/zapi/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          phone: message.phone,
-          message: message.message
-        })
+        body: JSON.stringify(body) // Client-token está no body mas nunca será logado
       });
 
       console.log('Response status:', response.status);
@@ -54,14 +66,14 @@ export class ZApiService {
     }
   }
 
-  async sendFormNotification(formData: ZApiFormNotificationData, managerPhone?: string): Promise<boolean> {
+  async sendFormNotification(formData: ZApiFormNotificationData, managerPhone?: string, config?: { instanceId?: string; token?: string; clientToken?: string }): Promise<boolean> {
     const message = this.formatFormMessage(formData);
     const phone = managerPhone || '5551982813505';
     
     return this.sendMessage({
       phone: phone,
       message: message
-    });
+    }, config);
   }
 
   private formatFormMessage(formData: ZApiFormNotificationData): string {
@@ -93,7 +105,7 @@ export class ZApiService {
   }
 
   // Método para teste rápido
-  async sendTestMessage(phone?: string): Promise<boolean> {
+  async sendTestMessage(phone?: string, config?: { instanceId?: string; token?: string; clientToken?: string }): Promise<boolean> {
     const testPhone = phone || '5551982813505';
     const testMessage = `🧪 TESTE Z-API
 
@@ -104,7 +116,7 @@ Data: ${new Date().toLocaleString('pt-BR')}`;
     return this.sendMessage({
       phone: testPhone,
       message: testMessage
-    });
+    }, config);
   }
 }
 
@@ -126,11 +138,11 @@ export function useZApi() {
     }
   };
 
-  const testConnection = async (phone?: string): Promise<boolean> => {
+  const testConnection = async (phone?: string, config?: { instanceId?: string; token?: string; clientToken?: string }): Promise<boolean> => {
     setIsLoading(true);
     try {
       const zapiService = new ZApiService();
-      const success = await zapiService.sendTestMessage(phone);
+      const success = await zapiService.sendTestMessage(phone, config);
       return success;
     } catch (error) {
       console.error('Erro no teste de conexão:', error);

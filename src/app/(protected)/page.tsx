@@ -936,108 +936,128 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
         aria-hidden="true"
       />
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-4">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <Link
-              href="/"
-              onClick={(event) => {
-                event.preventDefault();
-                go("home");
-              }}
-              className="group flex items-center gap-2 rounded-md px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition"
-              aria-label="Ir para a página inicial"
-              title="Ir para a página inicial"
-            >
-              <Logo width={36} height={36} className="transition-transform duration-200 group-hover:scale-105" />
-              <div className="hidden sm:flex flex-col leading-tight">
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: primaryColor }}>
-                  Tem Venda
-                </span>
-                <span className="text-sm font-semibold text-slate-900">Página inicial</span>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
+            {/* Logo e nome da empresa */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <Link
+                href="/"
+                onClick={(event) => {
+                  event.preventDefault();
+                  go("home");
+                }}
+                className="group flex items-center gap-2 rounded-md px-1 sm:px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition flex-shrink-0"
+                aria-label="Ir para a página inicial"
+                title="Ir para a página inicial"
+              >
+                <Logo width={32} height={32} className="sm:w-9 sm:h-9 transition-transform duration-200 group-hover:scale-105 flex-shrink-0" />
+                <div className="hidden sm:flex flex-col leading-tight min-w-0">
+                  <span className="text-xs font-medium uppercase tracking-wide truncate" style={{ color: primaryColor }}>
+                    Tem Venda
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-slate-900 truncate">Página inicial</span>
+                </div>
+              </Link>
+              
+              {/* Logo da loja */}
+              <div
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden flex-shrink-0"
+                style={{ borderColor: primaryBorder }}
+              >
+                {currentStore?.logoUrl ? (
+                  <Image src={currentStore.logoUrl} alt={storeTitle} width={36} height={36} className="object-cover w-full h-full" />
+                ) : (
+                  <span className="text-xs sm:text-sm font-semibold" style={{ color: primaryColor }}>
+                    {storeTitle[0] ?? "?"}
+                  </span>
+                )}
               </div>
-            </Link>
-            <div
-              className="w-9 h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden"
-              style={{ borderColor: primaryBorder }}
-            >
-              {currentStore?.logoUrl ? (
-                <Image src={currentStore.logoUrl} alt={storeTitle} width={36} height={36} className="object-cover" />
-              ) : (
-                <span className="font-semibold" style={{ color: primaryColor }}>
-                  {storeTitle[0] ?? "?"}
-                </span>
-              )}
+
+              {/* Nome da loja e seletor */}
+              <div className="min-w-0 flex-1 hidden sm:block">
+                {canSelectStore ? (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Select
+                      value={currentStore?.id}
+                      onValueChange={(value) => {
+                        void setCurrentStoreId(value);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 sm:h-9 bg-white min-w-0 max-w-[200px] lg:max-w-none">
+                        <SelectValue placeholder="Selecione a empresa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {storeRoleLabel && <span className="hidden lg:inline text-xs text-muted-foreground whitespace-nowrap">{storeRoleLabel}</span>}
+                  </div>
+                ) : (
+                  <div className="flex flex-col leading-tight min-w-0">
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{storeTitle}</span>
+                    {storeRoleLabel && <span className="text-xs text-muted-foreground truncate">{storeRoleLabel}</span>}
+                  </div>
+                )}
+              </div>
             </div>
-            {canSelectStore ? (
-              <div className="flex items-center gap-2">
-                <Select
-                  value={currentStore?.id}
-                  onValueChange={(value) => {
-                    void setCurrentStoreId(value);
-                  }}
-                >
-                  <SelectTrigger className="w-48 bg-white h-9">
-                    <SelectValue placeholder="Selecione a empresa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {storeRoleLabel && <span className="hidden sm:inline text-xs text-muted-foreground">{storeRoleLabel}</span>}
-              </div>
-            ) : (
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-gray-900 truncate">{storeTitle}</span>
-                {storeRoleLabel && <span className="text-xs text-muted-foreground">{storeRoleLabel}</span>}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span
-              className="px-3 py-1 rounded-full text-sm font-semibold border mx-auto sm:mx-0 whitespace-nowrap"
-              style={{
-                backgroundColor: primarySurface,
-                color: primaryColor,
-                borderColor: primaryBorder,
-              }}
-            >
-              {dateTimeLabel}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => {
-                if (pathname !== "/configuracoes") {
-                  router.push("/configuracoes");
-                }
-              }}
-              aria-label="Abrir configurações"
-            >
-              <Cog className="w-5 h-5" />
-            </Button>
-            <div className="hidden md:flex gap-2 items-center">
+
+            {/* Menu direito - Data/Hora e ações */}
+            <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 flex-shrink-0">
+              {/* Data/Hora - oculta em mobile muito pequeno */}
+              <span
+                className="hidden sm:inline-block px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold border whitespace-nowrap"
+                style={{
+                  backgroundColor: primarySurface,
+                  color: primaryColor,
+                  borderColor: primaryBorder,
+                }}
+              >
+                <span className="hidden lg:inline">{dateTimeLabel}</span>
+                <span className="lg:hidden">{new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+              </span>
+              
+              {/* Botão de configuração mobile */}
               <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 sm:h-9 sm:w-9 md:hidden"
                 onClick={() => {
                   if (pathname !== "/configuracoes") {
                     router.push("/configuracoes");
                   }
                 }}
+                aria-label="Abrir configurações"
               >
-                <Cog className="w-4 h-4" /> Configurações
+                <Cog className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Download className="w-4 h-4" /> Exportar
-              </Button>
+              
+              {/* Botões desktop */}
+              <div className="hidden md:flex gap-2 items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 sm:gap-2 text-xs sm:text-sm"
+                  onClick={() => {
+                    if (pathname !== "/configuracoes") {
+                      router.push("/configuracoes");
+                    }
+                  }}
+                >
+                  <Cog className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
+                  <span className="hidden lg:inline">Configurações</span>
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
+                  <span className="hidden lg:inline">Exportar</span>
+                </Button>
+              </div>
+              
+              <UserMenu />
             </div>
-            <UserMenu />
           </div>
         </div>
       </header>
@@ -1124,6 +1144,40 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
               </div>
             </section>
 
+            {/* Menu Principal - Barra de navegação horizontal */}
+            <section className="rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-white p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-emerald-600" />
+                  <h2 className="text-base font-semibold text-gray-900">Menu principal</h2>
+                  <span className="text-xs text-gray-500 hidden sm:inline">Tudo que você precisa, em um só lugar</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                {quickActionViews.map((view) => {
+                  const targetRoute = viewRoutes[view.key as keyof typeof viewRoutes] ?? "/";
+                  return (
+                    <Link
+                      key={view.key}
+                      href={targetRoute}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        go(view.key);
+                      }}
+                      className="group flex flex-col items-center gap-2 p-3 rounded-xl border border-emerald-100 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 hover:shadow-md hover:scale-105"
+                    >
+                      <div className="p-2 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 transition-colors">
+                        <view.icon className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-700 group-hover:text-emerald-700 text-center leading-tight">
+                        {view.title}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               {metrics.map((metric) => (
                 <Card key={metric.label} className="border border-emerald-50 shadow-sm">
@@ -1203,39 +1257,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
               </Card>
             </section>
 
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-1">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-base font-semibold text-gray-900">Ações rápidas</CardTitle>
-                  <CardDescription>Abra módulos essenciais com um clique.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {quickActionViews.map((view) => {
-                    const targetRoute = viewRoutes[view.key as keyof typeof viewRoutes] ?? "/";
-                    return (
-                      <Button
-                        key={view.key}
-                        asChild
-                        variant="ghost"
-                        className="w-full justify-start gap-2 text-sm hover:bg-emerald-50 hover:text-emerald-700"
-                      >
-                        <Link
-                          href={targetRoute}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            go(view.key);
-                          }}
-                        >
-                          <view.icon className="w-4 h-4" />
-                          {view.title}
-                          <ArrowUpRight className="w-4 h-4 ml-auto opacity-60" />
-                        </Link>
-                      </Button>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader className="pb-4">
                   <CardTitle className="text-base font-semibold text-gray-900">Ritmo das metas</CardTitle>
@@ -1343,38 +1365,45 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       </main>
 
       <footer className="mt-12 border-t border-gray-100 bg-white/60">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-10 justify-between">
-          <div className="flex items-center gap-3">
-            <Logo width={48} height={18} />
-            <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold text-gray-900">Sessão ativa</span>
-              <span className="text-sm text-muted-foreground">
-                {storeTitle}
-                {storeRoleLabel ? ` · ${storeRoleLabel}` : ""}
-              </span>
-            </div>
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <p className="text-sm font-medium text-center" style={{ color: primaryColor }}>
+              Tudo que você precisa, em um só lugar
+            </p>
           </div>
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-10 justify-between">
+            <div className="flex items-center gap-3">
+              <Logo width={48} height={18} />
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold text-gray-900">Sessão ativa</span>
+                <span className="text-sm text-muted-foreground">
+                  {storeTitle}
+                  {storeRoleLabel ? ` · ${storeRoleLabel}` : ""}
+                </span>
+              </div>
+            </div>
 
-          <div className="w-full lg:w-auto">
-            <h4 className="text-xs font-semibold uppercase tracking-wide mb-3 lg:text-center" style={{ color: primaryColor }}>
-              Navegação rápida
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {views.map((view) => (
-                <button
-                  key={view.key}
-                  type="button"
-                  onClick={() => go(view.key)}
-                  className="text-sm text-muted-foreground rounded-full px-4 py-2 border transition-all duration-200 hover:-translate-y-0.5"
-                  style={{
-                    borderColor: primaryBorder,
-                    backgroundColor: hexToRgba(primaryColor, 0.06),
-                    color: "#475569",
-                  }}
-                >
-                  {view.title}
-                </button>
-              ))}
+            <div className="w-full lg:w-auto">
+              <h4 className="text-xs font-semibold uppercase tracking-wide mb-3 lg:text-center" style={{ color: primaryColor }}>
+                Navegação rápida
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {views.map((view) => (
+                  <button
+                    key={view.key}
+                    type="button"
+                    onClick={() => go(view.key)}
+                    className="text-sm text-muted-foreground rounded-full px-4 py-2 border transition-all duration-200 hover:-translate-y-0.5"
+                    style={{
+                      borderColor: primaryBorder,
+                      backgroundColor: hexToRgba(primaryColor, 0.06),
+                      color: "#475569",
+                    }}
+                  >
+                    {view.title}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

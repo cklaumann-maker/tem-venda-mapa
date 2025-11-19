@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,22 +82,16 @@ export default function EquipeView() {
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [formResponses, setFormResponses] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
-  const [managerPhone, setManagerPhone] = useState('5551982813505'); // Estado para o número do gerente
-  const { sendFormNotification, testConnection, isLoading: zapiLoading } = useZApi();
+  const [managerPhone, setManagerPhone] = useState('5551982813505'); // Mantido para compatibilidade com sendFormNotification
+  const { sendFormNotification } = useZApi();
 
-  // ==================== Manager Phone Management ====================
-  React.useEffect(() => {
-    // Carrega o número do gerente salvo no localStorage
+  // Carrega o número do gerente salvo no localStorage
+  useEffect(() => {
     const savedPhone = localStorage.getItem('managerPhone');
     if (savedPhone) {
       setManagerPhone(savedPhone);
     }
   }, []);
-
-  const handleManagerPhoneChange = (phone: string) => {
-    setManagerPhone(phone);
-    localStorage.setItem('managerPhone', phone);
-  };
 
   // ==================== Form Management ====================
   const createNewForm = () => {
@@ -602,78 +596,21 @@ export default function EquipeView() {
         </div>
       )}
 
-      {/* SETTINGS TAB */}
-      {activeTab === 'settings' && isAdmin && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Configurações Z-API</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <Label>Instância Z-API</Label>
-                  <Input placeholder="3E5617B992C1A1A44BE92AC1CE4E084C" disabled />
-                </div>
-                <div>
-                  <Label>Token Z-API</Label>
-                  <Input placeholder="965006A3DBD3AE6A5ACF05EF" disabled />
-                </div>
-                <div>
-                  <Label>Client-Token Z-API (Sensível)</Label>
-                  <Input placeholder="[PROTEGIDO EM VARIÁVEIS DE AMBIENTE]" disabled />
-                </div>
-                <div>
-                  <Label>Número WhatsApp (Gerentes)</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      value={managerPhone}
-                      onChange={(e) => handleManagerPhoneChange(e.target.value)}
-                      placeholder="5551982813505"
-                      className="bg-white flex-1"
-                    />
-                    <Button
-                      onClick={() => handleManagerPhoneChange('5551982813505')}
-                      variant="outline"
-                      size="sm"
-                      className="whitespace-nowrap"
-                    >
-                      Resetar
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Número padrão: 5551982813505. Altere conforme necessário.
-                  </p>
-                </div>
-                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                  <p className="text-sm text-green-800">
-                    ✅ Z-API configurado automaticamente! Use a página de teste para verificar.
-                  </p>
-                </div>
-                <Button 
-                  onClick={async () => {
-                    const success = await testConnection(managerPhone);
-                    if (success) {
-                      alert(`✅ Teste Z-API bem-sucedido! Mensagem enviada para ${managerPhone}. Verifique seu WhatsApp!`);
-                    } else {
-                      alert(`❌ Erro no teste Z-API para ${managerPhone}. Verifique o console para detalhes.\n\nMas se você recebeu a mensagem no WhatsApp, a Z-API está funcionando!`);
-                    }
-                  }}
-                  disabled={zapiLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                >
-                  {zapiLoading ? 'Testando...' : `Testar Z-API (${managerPhone})`}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      {activeTab === 'settings' && !isAdmin && (
+      {/* SETTINGS TAB - Configurações Z-API foram movidas para Configurações > Integrações */}
+      {activeTab === 'settings' && (
         <Card>
           <CardContent className="p-6">
-            <div className="text-sm text-gray-600">
-              Apenas administradores podem acessar as configurações.
+            <div className="space-y-3 text-sm text-gray-600">
+              <p className="font-medium text-gray-900">Configurações Z-API movidas</p>
+              <p>
+                As configurações da Z-API foram movidas para a seção{" "}
+                <span className="font-semibold text-emerald-600">Configurações → Integrações</span>.
+              </p>
+              {!isAdmin && (
+                <p className="text-amber-600">
+                  Apenas administradores podem acessar as configurações de integrações.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
