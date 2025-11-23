@@ -20,7 +20,6 @@ import {
   TrendingDown,
   AlertTriangle,
   Clock,
-  Users2,
   Activity,
   PackageSearch,
   Sparkles,
@@ -28,6 +27,7 @@ import {
   ListTodo,
   Plus,
   Trash2,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -46,6 +46,7 @@ import { Input } from "@/components/ui/input";
 const MetasView = dynamic(() => import("@/components/metas/MetasView"), { ssr: false });
 const VendasView = dynamic(() => import("@/components/vendas/VendasView"), { ssr: false });
 const EquipeView = dynamic(() => import("@/components/equipe/EquipeView"), { ssr: false });
+const FormulariosView = dynamic(() => import("@/components/formularios/FormulariosView"), { ssr: false });
 
 type DashboardView = {
   key: string;
@@ -188,7 +189,7 @@ function TasksPanel({
               </div>
             ) : tasks.length === 0 ? (
               <div className="text-sm text-slate-600 border border-dashed border-emerald-200 rounded-lg px-4 py-5 bg-white/70 text-center">
-                Nenhuma tarefa pendente. Registre a próxima iniciativa da equipe.
+                Nenhuma tarefa pendente. Registre a próxima iniciativa.
               </div>
             ) : (
               <ul className="space-y-2">
@@ -387,9 +388,17 @@ const views: DashboardView[] = [
     key: "equipe",
     title: "Equipe",
     icon: Users,
-    desc: "Sistema de formulários e gestão",
+    desc: "Gerencie colaboradores, escalas e ponto",
     component: <EquipeView />,
     preload: () => preloadComponent(EquipeView),
+  },
+  {
+    key: "formularios",
+    title: "Formulários",
+    icon: FileText,
+    desc: "Crie e gerencie formulários para sua equipe",
+    component: <FormulariosView />,
+    preload: () => preloadComponent(FormulariosView),
   },
   { key: "clientes", title: "Clientes", icon: Heart, desc: "Descubra se estão voltando", component: <Placeholder title="Clientes" /> },
   { key: "insights", title: "Insights e Ações", icon: Brain, desc: "Transforme números em decisões", component: <Placeholder title="Insights e Ações" /> },
@@ -440,6 +449,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       campanhas: "/campanhas",
       financeiro: "/financeiro",
       equipe: "/equipe",
+      formularios: "/formularios",
       clientes: "/clientes",
       insights: "/insights",
       relatorios: "/relatorios",
@@ -814,12 +824,6 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       icon: PackageSearch,
       tone: "alert" as const,
     },
-    {
-      title: "Equipe",
-      description: "Reforçar campanha OTC com o time do turno B no pico das 17h.",
-      icon: Users2,
-      tone: "info" as const,
-    },
   ];
 
   const quickActionViews = views.filter((view) => view.key !== "home");
@@ -1153,7 +1157,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                   <span className="text-xs text-gray-500 hidden sm:inline">Tudo que você precisa, em um só lugar</span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 gap-3">
                 {quickActionViews.map((view) => {
                   const targetRoute = viewRoutes[view.key as keyof typeof viewRoutes] ?? "/";
                   return (
@@ -1164,7 +1168,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                         event.preventDefault();
                         go(view.key);
                       }}
-                      className="group flex flex-col items-center gap-2 p-3 rounded-xl border border-emerald-100 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 hover:shadow-md hover:scale-105"
+                      className="group flex flex-col items-center gap-2 p-4 rounded-xl border border-emerald-100 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 hover:shadow-md hover:scale-105"
                     >
                       <div className="p-2 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 transition-colors">
                         <view.icon className="w-5 h-5 text-emerald-600" />
@@ -1291,44 +1295,6 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-base font-semibold text-gray-900">Pulso da equipe</CardTitle>
-                  <CardDescription>Monitore ritmo de vendedores e gargalos de atendimento.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-2xl border border-emerald-100 p-3 bg-emerald-50/40 text-sm text-emerald-800 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    92% da escala de hoje já marcou presença.
-                  </div>
-                  <div className="space-y-3 text-xs text-gray-600">
-                    <div className="flex items-center justify-between">
-                      <span>Turno A · manhã</span>
-                      <span className="font-semibold text-emerald-600">Atingimento 78%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Turno B · tarde</span>
-                      <span className="font-semibold text-amber-600">Reforçar campanha OTC</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Farmacêutico responsável</span>
-                      <span className="font-semibold text-emerald-600">Presente</span>
-                    </div>
-                  </div>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link
-                      href="/equipe"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        go("equipe");
-                      }}
-                    >
-                      Ver escala completa
-                      <ArrowUpRight className="w-4 h-4 ml-2" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
             </section>
           </div>
         ) : (
