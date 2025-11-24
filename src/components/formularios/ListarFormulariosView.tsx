@@ -24,11 +24,9 @@ type Form = {
 
 export default function ListarFormulariosView({
   onEdit,
-  onStatsChange,
   onRespond,
 }: {
   onEdit?: (formId: string) => void;
-  onStatsChange?: () => void;
   onRespond?: (formId: string) => void;
 }) {
   const { currentStore, isAdmin } = useStore();
@@ -90,7 +88,6 @@ export default function ListarFormulariosView({
 
       if (updateError) throw updateError;
       await loadForms();
-      if (onStatsChange) onStatsChange();
     } catch (error: any) {
       console.error("Erro ao atualizar status:", error);
       setError("Não foi possível atualizar o status do formulário.");
@@ -105,7 +102,6 @@ export default function ListarFormulariosView({
       const { error: deleteError } = await supabase.from("forms").delete().eq("id", formId);
       if (deleteError) throw deleteError;
       await loadForms();
-      if (onStatsChange) onStatsChange();
     } catch (error: any) {
       console.error("Erro ao excluir formulário:", error);
       setError("Não foi possível excluir o formulário.");
@@ -137,7 +133,6 @@ export default function ListarFormulariosView({
       const { error: insertError } = await supabase.from("forms").insert(duplicateForm);
       if (insertError) throw insertError;
       await loadForms();
-      if (onStatsChange) onStatsChange();
     } catch (error: any) {
       console.error("Erro ao duplicar formulário:", error);
       setError("Não foi possível duplicar o formulário.");

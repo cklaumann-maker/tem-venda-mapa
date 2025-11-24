@@ -149,6 +149,33 @@ export default function ResponderFormularioView({
 
       if (insertError) throw insertError;
 
+      // Atualizar tarefa agendada se existir para hoje
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const { data: tasksData } = await supabase
+          .from("form_schedule_tasks")
+          .select("id")
+          .eq("form_id", form.id)
+          .eq("store_id", currentStore.id)
+          .eq("scheduled_date", today)
+          .eq("status", "pending")
+          .limit(1);
+
+        if (tasksData && tasksData.length > 0) {
+          await supabase
+            .from("form_schedule_tasks")
+            .update({
+              status: "completed",
+              completed_at: new Date().toISOString(),
+              response_id: responseData.id,
+            })
+            .eq("id", tasksData[0].id);
+        }
+      } catch (taskError) {
+        console.error("Erro ao atualizar tarefa agendada:", taskError);
+        // Não falhar o envio se houver erro ao atualizar a tarefa
+      }
+
       // Enviar notificação Z-API se configurado
       if (form.notify_on_response) {
         try {

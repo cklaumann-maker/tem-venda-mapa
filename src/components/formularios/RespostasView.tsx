@@ -15,6 +15,7 @@ type FormResponse = {
   form_title?: string;
   employee_id: string | null;
   employee_name?: string;
+  submitted_by?: string | null;
   responses: Record<string, any>;
   submitted_at: string;
   notification_sent: boolean;
@@ -28,6 +29,7 @@ export default function RespostasView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedResponse, setSelectedResponse] = useState<FormResponse | null>(null);
+  const [selectedFormQuestions, setSelectedFormQuestions] = useState<Record<string, string>>({});
   const [formFilter, setFormFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -81,9 +83,10 @@ export default function RespostasView() {
         form_title: resp.forms?.title || "",
       }));
 
-      // Buscar nomes dos colaboradores se houver employee_id
+      // Buscar nomes dos colaboradores ou usuários
       const responsesWithNames = await Promise.all(
         responsesWithForm.map(async (resp: FormResponse) => {
+          // Primeiro tenta buscar pelo employee_id
           if (resp.employee_id) {
             const { data: employeeData } = await supabase
               .from("employees")
@@ -95,6 +98,20 @@ export default function RespostasView() {
               employee_name: employeeData?.name || "Colaborador não encontrado",
             };
           }
+          
+          // Se não houver employee_id, busca pelo submitted_by (usuário que respondeu)
+          if (resp.submitted_by) {
+            const { data: profileData } = await supabase
+              .from("profiles")
+              .select("full_name")
+              .eq("id", resp.submitted_by)
+              .maybeSingle();
+            return {
+              ...resp,
+              employee_name: profileData?.full_name || "Usuário não encontrado",
+            };
+          }
+          
           return { ...resp, employee_name: "Anônimo" };
         })
       );
@@ -244,7 +261,25 @@ export default function RespostasView() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSelectedResponse(response)}
+                    onClick={async () => {
+                      setSelectedResponse(response);
+                      // Carregar perguntas do formulário para mapear IDs para títulos
+                      if (response.form_id) {
+                        const { data: formData } = await supabase
+                          .from("forms")
+                          .select("questions")
+                          .eq("id", response.form_id)
+                          .maybeSingle();
+                        
+                        if (formData?.questions) {
+                          const questionsMap: Record<string, string> = {};
+                          (formData.questions as any[]).forEach((q: any) => {
+                            questionsMap[q.id] = q.title || q.id;
+                          });
+                          setSelectedFormQuestions(questionsMap);
+                        }
+                      }
+                    }}
                   >
                     <Eye className="w-4 h-4 mr-2" />
                     Ver Detalhes
@@ -262,7 +297,10 @@ export default function RespostasView() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Detalhes da Resposta</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedResponse(null)}>
+              <Button variant="ghost" size="sm" onClick={() => {
+                setSelectedResponse(null);
+                setSelectedFormQuestions({});
+              }}>
                 ✕
               </Button>
             </div>
@@ -285,14 +323,23 @@ export default function RespostasView() {
             <div className="border-t pt-4">
               <strong className="text-sm">Respostas:</strong>
               <div className="mt-2 space-y-2">
-                {Object.entries(selectedResponse.responses || {}).map(([key, value]) => (
-                  <div key={key} className="p-3 bg-gray-50 rounded">
-                    <strong className="text-sm">{key}:</strong>
-                    <p className="text-sm mt-1">
-                      {Array.isArray(value) ? value.join(", ") : String(value)}
-                    </p>
-                  </div>
-                ))}
+                {Object.entries(selectedResponse.responses || {}).map(([key, value]) => {
+                  // Usar o título da pergunta se disponível, senão usar a chave
+                  const questionTitle = selectedFormQuestions[key] || key;
+                  // Remover prefixo "q_" se existir e não houver título mapeado
+                  const displayKey = questionTitle === key && key.startsWith("q_") 
+                    ? key.replace(/^q_\d+:/, "").trim() || key 
+                    : questionTitle;
+                  
+                  return (
+                    <div key={key} className="p-3 bg-gray-50 rounded">
+                      <strong className="text-sm">{displayKey}:</strong>
+                      <p className="text-sm mt-1">
+                        {Array.isArray(value) ? value.join(", ") : String(value)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </CardContent>

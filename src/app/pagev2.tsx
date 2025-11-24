@@ -27,7 +27,6 @@ const views = [{ key: "metas", title: "Metas", icon: Target, desc: "Defina o qua
   ,
   { key: "financeiro", title: "Financeiro", icon: PiggyBank, desc: "Veja se está sobrando dinheiro", component: <Placeholder title="Financeiro" /> },
   ,
-  { key: "equipe", title: "Equipe", icon: Users, desc: "Entenda quem mais vende", component: <Placeholder title="Equipe" /> },
   ,
   { key: "clientes", title: "Clientes", icon: Heart, desc: "Descubra se estão voltando", component: <Placeholder title="Clientes" /> },
   ,

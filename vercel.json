@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/mark-missed-tasks",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
+

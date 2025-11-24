@@ -47,6 +47,7 @@ const MetasView = dynamic(() => import("@/components/metas/MetasView"), { ssr: f
 const VendasView = dynamic(() => import("@/components/vendas/VendasView"), { ssr: false });
 const EquipeView = dynamic(() => import("@/components/equipe/EquipeView"), { ssr: false });
 const FormulariosView = dynamic(() => import("@/components/formularios/FormulariosView"), { ssr: false });
+const PendingFormsWidget = dynamic(() => import("@/components/formularios/PendingFormsWidget"), { ssr: false });
 
 type DashboardView = {
   key: string;
@@ -1098,11 +1099,16 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                 )
               )}
               <div className="relative z-10 flex flex-col gap-5 p-8">
-                <div className="inline-flex w-full max-w-xl items-center rounded-2xl bg-white/80 p-6 shadow-sm backdrop-blur">
-                  <h1 className="text-3xl lg:text-4xl font-bold leading-tight flex items-center gap-3 text-slate-900">
-                    <Sparkles className="w-6 h-6 text-emerald-600" />
-                    {greetingMessage}
-                  </h1>
+                <div className="flex flex-col lg:flex-row items-stretch gap-4">
+                  <div className="flex-1 flex items-center justify-center rounded-2xl bg-white/80 p-4 sm:p-6 shadow-sm backdrop-blur">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight flex items-center gap-2 sm:gap-3 text-slate-900">
+                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+                      <span className="break-words">{greetingMessage}</span>
+                    </h1>
+                  </div>
+                  <div className="flex-shrink-0 w-full lg:w-auto">
+                    <PendingFormsWidget />
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -49,7 +49,7 @@ const views = [
   { key: "vendas",      title: "Vendas",              icon: ShoppingBasket, desc: "Acompanhe o movimento da loja",               render: () => <VendasView /> },
   { key: "campanhas",   title: "Campanhas",           icon: CalendarRange,  desc: "Planeje seus momentos de venda",              render: () => <Placeholder title="Campanhas" /> },
   { key: "financeiro",  title: "Financeiro",          icon: PiggyBank,      desc: "Veja se está sobrando dinheiro",             render: () => <Placeholder title="Financeiro" /> },
-  { key: "equipe",      title: "Equipe",              icon: Users,          desc: "Entenda quem mais vende",                    render: () => <Placeholder title="Equipe" /> },
+  { key: "equipe",      title: "Equipe",              icon: Users,          desc: "Gerencie colaboradores, escalas e ponto",    render: () => <Placeholder title="Equipe" /> },
   { key: "clientes",    title: "Clientes",            icon: Heart,          desc: "Descubra se estão voltando",                 render: () => <Placeholder title="Clientes" /> },
   { key: "insights",    title: "Insights e Ações",    icon: Brain,          desc: "Transforme números em decisões",             render: () => <Placeholder title="Insights e Ações" /> },
   { key: "relatorios",  title: "Relatórios",          icon: BarChart4,      desc: "Compare seu crescimento",                    render: () => <Placeholder title="Relatórios" /> },

@@ -47,17 +47,6 @@ const presetWidgets: WidgetPreset[] = [
     ],
   },
   {
-    id: "pulse-equipe",
-    title: "Pulso da equipe",
-    description: "Status da escala, presença e destaques por colaborador.",
-    defaultEnabled: true,
-    personalizationHints: [
-      "Destacar líderes por categoria (ex.: vendas de OTC).",
-      "Permitir notas rápidas do farmacêutico responsável.",
-      "Integração com check-in digital ou planilha de RH.",
-    ],
-  },
-  {
     id: "estoque-inteligente",
     title: "Estoque inteligente",
     description: "Itens críticos, ruptura e cobertura de dias por categoria.",
@@ -113,17 +102,6 @@ const presetWidgets: WidgetPreset[] = [
     ],
   },
   {
-    id: "humor-da-equipe",
-    title: "Humor da equipe",
-    description: "Pesquisas rápidas de clima para acompanhar moral do time.",
-    defaultEnabled: false,
-    personalizationHints: [
-      "Pulse semanal com emoji (1-5).",
-      "Permitir comentários anônimos para o gestor.",
-      "Exibir recomendações automáticas de endomarketing.",
-    ],
-  },
-  {
     id: "proximos-pasos",
     title: "Próximos passos",
     description: "Checklist executivo personalizado com foco em decisão diária.",
@@ -166,7 +144,7 @@ function ConfiguracoesHomeContent() {
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>Somente usuários com perfil de administrador podem personalizar a página inicial.</p>
             <p>
-              Caso precise de alterações, solicite ao responsável da rede ou abra um chamado com a equipe TEM VENDA para
+              Caso precise de alterações, solicite ao responsável da rede ou abra um chamado com o suporte TEM VENDA para
               avaliarmos a configuração ideal.
             </p>
           </CardContent>
@@ -232,7 +210,6 @@ function ConfiguracoesHomeContent() {
                 <SelectContent>
                   <SelectItem value="padrao">Layout TEM VENDA (padrão)</SelectItem>
                   <SelectItem value="foco-vendas">Foco em vendas (widgets de performance primeiro)</SelectItem>
-                  <SelectItem value="foco-equipe">Foco em equipe (bem-estar e escala em destaque)</SelectItem>
                   <SelectItem value="financeiro">Painel financeiro (KPIs e fluxo de caixa em destaque)</SelectItem>
                 </SelectContent>
               </Select>
@@ -352,7 +329,7 @@ function ConfiguracoesHomeContent() {
           <p className="text-xs">
             Em breve adicionaremos persistência direta das configurações (JSON por loja) e pré-visualização com drag &amp;
             drop. Se desejar antecipar a implementação, registre as necessidades em <strong>Notas</strong> e acione a
-            equipe TEM VENDA.
+            suporte TEM VENDA.
           </p>
           <div className="flex flex-wrap gap-3">
             <Button disabled className="cursor-not-allowed">

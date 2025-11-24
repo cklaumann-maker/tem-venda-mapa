@@ -1,70 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Plus, List, BarChart3, Loader2, AlertCircle } from "lucide-react";
+import { Plus, List, BarChart3, BarChart, Calendar } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
-import { supabaseClient } from "@/lib/supabaseClient";
 import CriarFormularioView from "./CriarFormularioView";
 import ListarFormulariosView from "./ListarFormulariosView";
 import RespostasView from "./RespostasView";
 import ResponderFormularioView from "./ResponderFormularioView";
+import DashboardView from "./DashboardView";
+import CalendarView from "./CalendarView";
 
 export default function FormulariosView() {
   const { currentStore } = useStore();
-  const supabase = useMemo(() => supabaseClient(), []);
   const [activeTab, setActiveTab] = useState<string>("listar");
   const [respondingFormId, setRespondingFormId] = useState<string | null>(null);
-  const [stats, setStats] = useState({
-    totalForms: 0,
-    activeForms: 0,
-    totalResponses: 0,
-    pendingResponses: 0,
-  });
-  const [loadingStats, setLoadingStats] = useState(false);
-
-  useEffect(() => {
-    if (currentStore) {
-      loadStats();
-    }
-  }, [currentStore, activeTab]);
-
-  const loadStats = async () => {
-    if (!currentStore) return;
-    setLoadingStats(true);
-    try {
-      // Contar formulários
-      const { count: totalForms } = await supabase
-        .from("forms")
-        .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id);
-
-      const { count: activeForms } = await supabase
-        .from("forms")
-        .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
-        .eq("is_active", true);
-
-      // Contar respostas
-      const { count: totalResponses } = await supabase
-        .from("form_responses")
-        .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id);
-
-      setStats({
-        totalForms: totalForms || 0,
-        activeForms: activeForms || 0,
-        totalResponses: totalResponses || 0,
-        pendingResponses: 0, // Pode ser calculado depois com lógica específica
-      });
-    } catch (error) {
-      console.error("Erro ao carregar estatísticas:", error);
-    } finally {
-      setLoadingStats(false);
-    }
-  };
 
   if (!currentStore) {
     return (
@@ -93,65 +45,9 @@ export default function FormulariosView() {
         </Button>
       </div>
 
-      {/* Dashboard Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Formulários</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {loadingStats ? "..." : stats.totalForms}
-            </div>
-            <p className="text-xs text-muted-foreground">{stats.activeForms} ativos</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Formulários Ativos</CardTitle>
-            <FileText className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {loadingStats ? "..." : stats.activeForms}
-            </div>
-            <p className="text-xs text-muted-foreground">Disponíveis para resposta</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Respostas</CardTitle>
-            <List className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {loadingStats ? "..." : stats.totalResponses}
-            </div>
-            <p className="text-xs text-muted-foreground">Respostas recebidas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Taxa de Resposta</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {loadingStats
-                ? "..."
-                : stats.totalForms > 0
-                ? `${Math.round((stats.totalResponses / stats.totalForms) * 10)}%`
-                : "0%"}
-            </div>
-            <p className="text-xs text-muted-foreground">Média por formulário</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="listar" className="flex items-center gap-2">
             <List className="w-4 h-4" />
             Meus Formulários
@@ -164,6 +60,14 @@ export default function FormulariosView() {
             <BarChart3 className="w-4 h-4" />
             Respostas
           </TabsTrigger>
+          <TabsTrigger value="dashboards" className="flex items-center gap-2">
+            <BarChart className="w-4 h-4" />
+            Dashboards
+          </TabsTrigger>
+          <TabsTrigger value="calendario" className="flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            Calendário
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="listar" className="space-y-4">
@@ -172,14 +76,12 @@ export default function FormulariosView() {
               formId={respondingFormId}
               onSuccess={() => {
                 setRespondingFormId(null);
-                loadStats();
               }}
               onCancel={() => setRespondingFormId(null)}
             />
           ) : (
             <ListarFormulariosView
               onEdit={(formId) => setActiveTab("criar")}
-              onStatsChange={loadStats}
               onRespond={(formId) => setRespondingFormId(formId)}
             />
           )}
@@ -188,12 +90,19 @@ export default function FormulariosView() {
         <TabsContent value="criar" className="space-y-4">
           <CriarFormularioView onSuccess={() => {
             setActiveTab("listar");
-            loadStats();
           }} />
         </TabsContent>
 
         <TabsContent value="respostas" className="space-y-4">
           <RespostasView />
+        </TabsContent>
+
+        <TabsContent value="dashboards" className="space-y-4">
+          <DashboardView />
+        </TabsContent>
+
+        <TabsContent value="calendario" className="space-y-4">
+          <CalendarView />
         </TabsContent>
       </Tabs>
     </div>

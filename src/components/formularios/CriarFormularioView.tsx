@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, GripVertical, Save, Eye, Loader2, AlertCircle, MessageSquare } from "lucide-react";
+import { Plus, Trash2, GripVertical, Save, Eye, Loader2, AlertCircle, MessageSquare, Calendar, Clock } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useAuth } from "@/hooks/useAuth";
 import { supabaseClient } from "@/lib/supabaseClient";
@@ -36,6 +36,14 @@ type FormData = {
   notification_recipients: string[];
   notification_template: string;
   questions: Question[];
+  // Agendamento
+  schedule_enabled: boolean;
+  schedule_frequency: string; // 'daily', 'weekly', 'custom_days', 'custom_interval'
+  schedule_time: string; // HH:mm
+  schedule_days_of_week: number[]; // Para frequência semanal (0=domingo, 1=segunda, etc.)
+  schedule_interval_days: number; // Para frequência "de X em X dias"
+  schedule_start_date: string; // Data de início
+  schedule_end_date: string; // Data de fim (opcional)
 };
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
@@ -85,6 +93,14 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
     notification_recipients: [],
     notification_template: DEFAULT_NOTIFICATION_TEMPLATE,
     questions: [],
+    // Agendamento
+    schedule_enabled: false,
+    schedule_frequency: "daily",
+    schedule_time: "08:00",
+    schedule_days_of_week: [1, 2, 3, 4, 5], // Segunda a sexta por padrão
+    schedule_interval_days: 1,
+    schedule_start_date: new Date().toISOString().split("T")[0],
+    schedule_end_date: "",
   });
 
   const [newRecipient, setNewRecipient] = useState("");
@@ -166,7 +182,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
     setError(null);
 
     try {
-      const payload = {
+      const payload: any = {
         store_id: currentStore.id,
         title: formData.title.trim(),
         description: formData.description.trim() || null,
@@ -179,11 +195,24 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
         notification_template: formData.notification_template.trim() || DEFAULT_NOTIFICATION_TEMPLATE,
         questions: questionsWithTitles,
         created_by: user.id,
+        // Agendamento
+        schedule_enabled: formData.schedule_enabled,
+        schedule_frequency: formData.schedule_enabled ? formData.schedule_frequency : null,
+        schedule_time: formData.schedule_enabled ? formData.schedule_time : null,
+        schedule_days_of_week: formData.schedule_enabled && formData.schedule_frequency === "weekly" ? formData.schedule_days_of_week : null,
+        schedule_interval_days: formData.schedule_enabled && formData.schedule_frequency === "custom_interval" ? formData.schedule_interval_days : null,
+        schedule_start_date: formData.schedule_enabled ? formData.schedule_start_date : null,
+        schedule_end_date: formData.schedule_enabled && formData.schedule_end_date ? formData.schedule_end_date : null,
       };
 
-      const { error: insertError } = await supabase.from("forms").insert(payload);
+      const { data: insertedForm, error: insertError } = await supabase.from("forms").insert(payload).select().single();
 
       if (insertError) throw insertError;
+
+      // Se o agendamento está habilitado, criar as tarefas agendadas
+      if (formData.schedule_enabled && insertedForm) {
+        await createScheduledTasks(insertedForm.id);
+      }
 
       if (onSuccess) {
         onSuccess();
@@ -211,6 +240,67 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
       ...formData,
       notification_recipients: formData.notification_recipients.filter((r) => r !== recipient),
     });
+  };
+
+  // Função para criar tarefas agendadas
+  const createScheduledTasks = async (formId: string) => {
+    if (!currentStore || !formData.schedule_enabled) return;
+
+    const tasks: any[] = [];
+    const startDate = new Date(formData.schedule_start_date);
+    const endDate = formData.schedule_end_date ? new Date(formData.schedule_end_date) : null;
+    const [hours, minutes] = formData.schedule_time.split(":").map(Number);
+    const currentDate = new Date(startDate);
+
+    // Limitar a criação de tarefas para os próximos 365 dias
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 365);
+    const finalEndDate = endDate && endDate < maxDate ? endDate : maxDate;
+
+    while (currentDate <= finalEndDate) {
+      let shouldSchedule = false;
+
+      if (formData.schedule_frequency === "daily") {
+        shouldSchedule = true;
+      } else if (formData.schedule_frequency === "weekly") {
+        const dayOfWeek = currentDate.getDay();
+        shouldSchedule = formData.schedule_days_of_week.includes(dayOfWeek);
+      } else if (formData.schedule_frequency === "custom_interval") {
+        const daysDiff = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        shouldSchedule = daysDiff % formData.schedule_interval_days === 0;
+      } else if (formData.schedule_frequency === "custom_days") {
+        // Similar a weekly, mas pode ser configurado de forma diferente
+        const dayOfWeek = currentDate.getDay();
+        shouldSchedule = formData.schedule_days_of_week.includes(dayOfWeek);
+      }
+
+      if (shouldSchedule) {
+        const scheduledDateTime = new Date(currentDate);
+        scheduledDateTime.setHours(hours, minutes, 0, 0);
+
+        tasks.push({
+          form_id: formId,
+          store_id: currentStore.id,
+          scheduled_date: currentDate.toISOString().split("T")[0],
+          scheduled_time: formData.schedule_time,
+          scheduled_datetime: scheduledDateTime.toISOString(),
+          status: "pending",
+        });
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Inserir tarefas em lotes (Supabase tem limite de 1000 por insert)
+    const batchSize = 500;
+    for (let i = 0; i < tasks.length; i += batchSize) {
+      const batch = tasks.slice(i, i + batchSize);
+      const { error } = await supabase.from("form_schedule_tasks").insert(batch);
+      if (error) {
+        console.error("Erro ao criar tarefas agendadas:", error);
+        // Não falhar o salvamento do formulário se houver erro nas tarefas
+      }
+    }
   };
 
   if (!currentStore) {
@@ -329,7 +419,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
-              Notificações Z-API
+              Notificações via WhatsApp
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -405,6 +495,160 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
                   <p className="text-xs text-muted-foreground mt-1">
                     Variáveis disponíveis: {"{formulario}"}, {"{colaborador}"}, {"{loja}"}, {"{data}"}, {"{respostas}"}
                   </p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Agendamento de Frequência */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Agendamento de Frequência
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="schedule_enabled"
+                checked={formData.schedule_enabled}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, schedule_enabled: checked === true })
+                }
+              />
+              <Label htmlFor="schedule_enabled" className="cursor-pointer">
+                Habilitar agendamento automático de respostas
+              </Label>
+            </div>
+
+            {formData.schedule_enabled && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="schedule_frequency">Frequência</Label>
+                    <Select
+                      value={formData.schedule_frequency}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, schedule_frequency: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Todos os dias</SelectItem>
+                        <SelectItem value="weekly">Semanal (dias específicos)</SelectItem>
+                        <SelectItem value="custom_interval">De X em X dias</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="schedule_time">Horário</Label>
+                    <Input
+                      id="schedule_time"
+                      type="time"
+                      value={formData.schedule_time}
+                      onChange={(e) =>
+                        setFormData({ ...formData, schedule_time: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {formData.schedule_frequency === "weekly" && (
+                  <div>
+                    <Label>Dias da Semana</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {[
+                        { value: 0, label: "Dom" },
+                        { value: 1, label: "Seg" },
+                        { value: 2, label: "Ter" },
+                        { value: 3, label: "Qua" },
+                        { value: 4, label: "Qui" },
+                        { value: 5, label: "Sex" },
+                        { value: 6, label: "Sáb" },
+                      ].map((day) => (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => {
+                            const currentDays = formData.schedule_days_of_week;
+                            const newDays = currentDays.includes(day.value)
+                              ? currentDays.filter((d) => d !== day.value)
+                              : [...currentDays, day.value];
+                            setFormData({ ...formData, schedule_days_of_week: newDays });
+                          }}
+                          className={`px-3 py-1 rounded text-sm ${
+                            formData.schedule_days_of_week.includes(day.value)
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {formData.schedule_frequency === "custom_interval" && (
+                  <div>
+                    <Label htmlFor="schedule_interval_days">Intervalo (dias)</Label>
+                    <Input
+                      id="schedule_interval_days"
+                      type="number"
+                      min="1"
+                      value={formData.schedule_interval_days}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          schedule_interval_days: parseInt(e.target.value) || 1,
+                        })
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Exemplo: 3 = de 3 em 3 dias
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="schedule_start_date">Data de Início</Label>
+                    <Input
+                      id="schedule_start_date"
+                      type="date"
+                      value={formData.schedule_start_date}
+                      onChange={(e) =>
+                        setFormData({ ...formData, schedule_start_date: e.target.value })
+                      }
+                      min={new Date().toISOString().split("T")[0]}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="schedule_end_date">Data de Fim (opcional)</Label>
+                    <Input
+                      id="schedule_end_date"
+                      type="date"
+                      value={formData.schedule_end_date}
+                      onChange={(e) =>
+                        setFormData({ ...formData, schedule_end_date: e.target.value })
+                      }
+                      min={formData.schedule_start_date}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Deixe vazio para sem data de fim
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-blue-50 rounded text-sm text-blue-800">
+                  <strong>Como funciona:</strong> Quando você salvar este formulário, serão criadas
+                  automaticamente tarefas no calendário para cada data/hora agendada. Os
+                  colaboradores poderão ver essas tarefas na aba "Dashboards" e você poderá
+                  acompanhar quais foram respondidas.
                 </div>
               </>
             )}
