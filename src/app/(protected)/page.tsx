@@ -36,6 +36,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import UserMenu from "@/components/auth/UserMenu";
 import Logo from "@/components/common/Logo";
+import { StoreSelector } from "@/components/common/StoreSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore } from "@/contexts/StoreContext";
 import { supabaseClient } from "@/lib/supabaseClient";
@@ -978,35 +979,9 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                 )}
               </div>
 
-              {/* Nome da loja e seletor */}
-              <div className="min-w-0 flex-1 hidden sm:block">
-                {canSelectStore ? (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Select
-                      value={currentStore?.id}
-                      onValueChange={(value) => {
-                        void setCurrentStoreId(value);
-                      }}
-                    >
-                      <SelectTrigger className="h-8 sm:h-9 bg-white min-w-0 max-w-[200px] lg:max-w-none">
-                        <SelectValue placeholder="Selecione a empresa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stores.map((store) => (
-                          <SelectItem key={store.id} value={store.id}>
-                            {store.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {storeRoleLabel && <span className="hidden lg:inline text-xs text-muted-foreground whitespace-nowrap">{storeRoleLabel}</span>}
-                  </div>
-                ) : (
-                  <div className="flex flex-col leading-tight min-w-0">
-                    <span className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{storeTitle}</span>
-                    {storeRoleLabel && <span className="text-xs text-muted-foreground truncate">{storeRoleLabel}</span>}
-                  </div>
-                )}
+              {/* Seletor de Empresa/Loja e Modo de Visualização */}
+              <div className="min-w-0 flex-1 hidden md:block">
+                <StoreSelector />
               </div>
             </div>
 

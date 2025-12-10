@@ -4,8 +4,10 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputWithEmoji } from "@/components/ui/input-with-emoji";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TextareaWithEmoji } from "@/components/ui/textarea-with-emoji";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Send, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
@@ -333,7 +335,7 @@ export default function ResponderFormularioView({
                 )}
 
                 {question.type === "text" && (
-                  <Input
+                  <InputWithEmoji
                     id={question.id}
                     value={responses[question.id] || ""}
                     onChange={(e) => handleResponseChange(question.id, e.target.value)}
@@ -343,7 +345,7 @@ export default function ResponderFormularioView({
                 )}
 
                 {question.type === "textarea" && (
-                  <Textarea
+                  <TextareaWithEmoji
                     id={question.id}
                     value={responses[question.id] || ""}
                     onChange={(e) => handleResponseChange(question.id, e.target.value)}

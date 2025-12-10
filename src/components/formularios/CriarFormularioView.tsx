@@ -4,8 +4,10 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputWithEmoji } from "@/components/ui/input-with-emoji";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TextareaWithEmoji } from "@/components/ui/textarea-with-emoji";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, GripVertical, Save, Eye, Loader2, AlertCircle, MessageSquare, Calendar, Clock } from "lucide-react";
@@ -351,7 +353,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="title">Título do Formulário *</Label>
-              <Input
+              <InputWithEmoji
                 id="title"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -361,7 +363,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
             </div>
             <div>
               <Label htmlFor="description">Descrição</Label>
-              <Textarea
+              <TextareaWithEmoji
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -483,7 +485,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
 
                 <div>
                   <Label htmlFor="template">Template da Mensagem</Label>
-                  <Textarea
+                  <TextareaWithEmoji
                     id="template"
                     value={formData.notification_template}
                     onChange={(e) =>
@@ -712,7 +714,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
                     </div>
                     <div>
                       <Label>Título da Pergunta *</Label>
-                      <Input
+                      <InputWithEmoji
                         value={question.title}
                         onChange={(e) => updateQuestion(question.id, { title: e.target.value })}
                         placeholder="Digite a pergunta..."
@@ -721,7 +723,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
                     </div>
                     <div>
                       <Label>Descrição (opcional)</Label>
-                      <Textarea
+                      <TextareaWithEmoji
                         value={question.description || ""}
                         onChange={(e) =>
                           updateQuestion(question.id, { description: e.target.value })
@@ -736,7 +738,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
                         <div className="space-y-2 mt-1">
                           {question.options?.map((option, optIndex) => (
                             <div key={optIndex} className="flex gap-2">
-                              <Input
+                              <InputWithEmoji
                                 value={option}
                                 onChange={(e) =>
                                   updateOption(question.id, optIndex, e.target.value)
