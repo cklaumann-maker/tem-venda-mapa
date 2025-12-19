@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { useStoreContext } from "@/contexts/StoreContext";
+import { useStore } from "@/contexts/StoreContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,7 @@ export function GerenciarUsuariosView() {
     profileRole,
     isAdmin,
     isManager,
-  } = useStoreContext();
+  } = useStore();
 
   const [invites, setInvites] = useState<UserInvite[]>([]);
   const [loading, setLoading] = useState(false);
