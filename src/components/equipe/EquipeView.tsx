@@ -18,7 +18,7 @@ import PerformanceView from "./PerformanceView";
 import RelatoriosView from "./RelatoriosView";
 
 export default function EquipeView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [activeTab, setActiveTab] = useState<string>("colaboradores");
   const [metrics, setMetrics] = useState({
@@ -29,20 +29,28 @@ export default function EquipeView() {
   const [loadingMetrics, setLoadingMetrics] = useState(false);
 
   useEffect(() => {
-    if (currentStore) {
-      loadMetrics();
-    }
-  }, [currentStore]);
+    loadMetrics();
+  }, [getStoreIdsForQuery, viewMode]);
 
   const loadMetrics = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setMetrics({
+        activeEmployees: 0,
+        monthlyShifts: 0,
+        monthlyOvertime: 0,
+      });
+      setLoadingMetrics(false);
+      return;
+    }
+
     setLoadingMetrics(true);
     try {
       // Contar colaboradores ativos
       const { count: employeesCount } = await supabase
         .from("employees")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active");
 
       // Contar escalas do mês atual
@@ -57,7 +65,7 @@ export default function EquipeView() {
       const { count: shiftsCount } = await supabase
         .from("employee_shifts")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("shift_date", startOfMonth)
         .lte("shift_date", endOfMonth);
 
@@ -65,7 +73,7 @@ export default function EquipeView() {
       const { data: overtimeData } = await supabase
         .from("time_records")
         .select("overtime_hours")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("record_date", startOfMonth)
         .lte("record_date", endOfMonth);
 

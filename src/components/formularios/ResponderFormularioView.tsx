@@ -45,7 +45,7 @@ export default function ResponderFormularioView({
   onSuccess?: () => void;
   onCancel?: () => void;
 }) {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore } = useStore();
   const { user: authUser } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [form, setForm] = useState<Form | null>(null);
@@ -56,14 +56,20 @@ export default function ResponderFormularioView({
   const [employee, setEmployee] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
-    if (formId && currentStore) {
+    if (formId) {
       loadForm();
       loadEmployee();
     }
-  }, [formId, currentStore]);
+  }, [formId, getStoreIdsForQuery, viewMode]);
 
   const loadForm = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setError("Nenhuma loja disponível.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -71,7 +77,7 @@ export default function ResponderFormularioView({
         .from("forms")
         .select("*")
         .eq("id", formId)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("is_active", true)
         .maybeSingle();
 
@@ -91,12 +97,14 @@ export default function ResponderFormularioView({
   };
 
   const loadEmployee = async () => {
-    if (!currentStore || !authUser) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0 || !authUser) return;
+    
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("user_id", authUser.id)
         .maybeSingle();
 
@@ -118,7 +126,7 @@ export default function ResponderFormularioView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form || !currentStore) return;
+    if (!form || !currentStoreId) return;
 
     // Validar campos obrigatórios
     const requiredQuestions = form.questions.filter((q) => q.required);
@@ -141,7 +149,7 @@ export default function ResponderFormularioView({
         .from("form_responses")
         .insert({
           form_id: form.id,
-          store_id: currentStore.id,
+          store_id: currentStoreId,
           employee_id: employee?.id || null,
           responses: responses,
           submitted_by: authUser?.id || null,
@@ -158,7 +166,7 @@ export default function ResponderFormularioView({
           .from("form_schedule_tasks")
           .select("id")
           .eq("form_id", form.id)
-          .eq("store_id", currentStore.id)
+          .eq("store_id", currentStoreId)
           .eq("scheduled_date", today)
           .eq("status", "pending")
           .limit(1);
@@ -202,7 +210,7 @@ export default function ResponderFormularioView({
           message = message
             .replace(/{formulario}/g, form.title)
             .replace(/{colaborador}/g, employee?.name || "Anônimo")
-            .replace(/{loja}/g, currentStore.name || "Loja")
+            .replace(/{loja}/g, currentStore?.name || "Loja")
             .replace(/{data}/g, new Date().toLocaleString("pt-BR"))
             .replace(/{respostas}/g, formattedResponses);
 

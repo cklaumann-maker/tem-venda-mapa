@@ -28,7 +28,7 @@ type Employee = {
 };
 
 export default function ColaboradoresView() {
-  const { currentStore, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -53,21 +53,31 @@ export default function ColaboradoresView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-    }
-  }, [currentStore]);
+    loadEmployees();
+  }, [getStoreIdsForQuery, viewMode, statusFilter]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from("employees")
         .select("*")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("name", { ascending: true });
+
+      if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter);
+      }
+
+      const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
 
@@ -82,14 +92,14 @@ export default function ColaboradoresView() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentStore || !user) return;
+    if (!currentStoreId || !user) return;
 
     setSaving(true);
     setError(null);
 
     try {
       const employeeData = {
-        store_id: currentStore.id,
+        store_id: currentStoreId,
         name: formData.name.trim(),
         cpf: formData.cpf.trim() || null,
         email: formData.email.trim() || null,

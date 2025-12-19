@@ -28,7 +28,7 @@ type Employee = {
 };
 
 export default function EscalasView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -48,19 +48,22 @@ export default function EscalasView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-      loadShifts();
-    }
-  }, [currentStore, currentDate]);
+    loadEmployees();
+    loadShifts();
+  }, [getStoreIdsForQuery, viewMode, currentDate]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active")
         .order("name", { ascending: true });
 
@@ -72,7 +75,13 @@ export default function EscalasView() {
   };
 
   const loadShifts = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setShifts([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -87,7 +96,7 @@ export default function EscalasView() {
           *,
           employees!inner(name)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("shift_date", startDate)
         .lte("shift_date", endDate)
         .order("shift_date", { ascending: true });
@@ -111,7 +120,7 @@ export default function EscalasView() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentStore || !user) return;
+    if (!currentStoreId || !user) return;
 
     setSaving(true);
     setError(null);
@@ -119,7 +128,7 @@ export default function EscalasView() {
     try {
       const { error: insertError } = await supabase.from("employee_shifts").insert({
         employee_id: formData.employee_id,
-        store_id: currentStore.id,
+        store_id: currentStoreId,
         shift_date: formData.date,
         shift_type: formData.shift_type,
         start_time: formData.start_time,

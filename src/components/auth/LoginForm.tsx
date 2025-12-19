@@ -1,20 +1,35 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabaseClient } from "@/lib/supabaseClient"
 import Logo from "@/components/common/Logo"
+import { CheckCircle2 } from "lucide-react"
 
 export default function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [successMessage, setSuccessMessage] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const activated = searchParams.get("activated")
+    const passwordReset = searchParams.get("passwordReset")
+    
+    if (activated === "true") {
+      setSuccessMessage("Conta ativada com sucesso! Faça login para continuar.")
+    } else if (passwordReset === "true") {
+      setSuccessMessage("Senha redefinida com sucesso! Faça login para continuar.")
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -82,9 +97,16 @@ export default function LoginForm() {
             </div>
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-400 p-3 rounded-md">
-                {error}
-              </div>
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {successMessage && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                <AlertDescription className="text-green-800">{successMessage}</AlertDescription>
+              </Alert>
             )}
 
             <Button 
@@ -109,10 +131,7 @@ export default function LoginForm() {
               <button 
                 type="button"
                 className="text-primary hover:underline font-medium"
-                onClick={() => {
-                  // Implementar reset de senha se necessário
-                  alert("Funcionalidade de reset de senha será implementada em breve")
-                }}
+                onClick={() => router.push("/recuperar-senha")}
               >
                 Clique aqui
               </button>

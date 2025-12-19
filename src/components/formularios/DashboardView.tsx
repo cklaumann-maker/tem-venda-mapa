@@ -75,7 +75,7 @@ const COLORS = {
 };
 
 export default function DashboardView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [forms, setForms] = useState<Form[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string>("all");
@@ -92,10 +92,8 @@ export default function DashboardView() {
   const [totalEmployees, setTotalEmployees] = useState(0);
 
   useEffect(() => {
-    if (currentStore) {
-      loadData();
-    }
-  }, [currentStore, periodFilter]);
+    loadData();
+  }, [getStoreIdsForQuery, viewMode, periodFilter]);
 
   useEffect(() => {
     if (selectedFormId !== "all" && forms.length > 0) {
@@ -106,7 +104,18 @@ export default function DashboardView() {
   }, [selectedFormId, forms, periodFilter]);
 
   const loadData = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setForms([]);
+      setOverview({
+        totalActiveForms: 0,
+        averageResponsesPerDay: 0,
+        totalResponses: 0,
+        lastResponseDate: null,
+      });
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -115,7 +124,7 @@ export default function DashboardView() {
       const { data: formsData, error: formsError } = await supabase
         .from("forms")
         .select("*")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
@@ -126,7 +135,7 @@ export default function DashboardView() {
       const { count: employeesCount } = await supabase
         .from("employees")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active");
 
       setTotalEmployees(employeesCount || 0);
@@ -136,7 +145,7 @@ export default function DashboardView() {
       const { data: allResponses } = await supabase
         .from("form_responses")
         .select("form_id, employee_id, submitted_at")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("submitted_at", startDate);
 
       const activeForms = formsData || [];
@@ -152,7 +161,7 @@ export default function DashboardView() {
       const { data: lastResponse } = await supabase
         .from("form_responses")
         .select("submitted_at")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("submitted_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -177,7 +186,12 @@ export default function DashboardView() {
   };
 
   const loadFormStats = async (formId: string) => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setFormStats(null);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -188,7 +202,7 @@ export default function DashboardView() {
       const { count: employeesCount } = await supabase
         .from("employees")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active");
 
       const startDate = getStartDate(parseInt(periodFilter));
@@ -198,7 +212,7 @@ export default function DashboardView() {
         .from("form_responses")
         .select("*")
         .eq("form_id", formId)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("submitted_at", startDate)
         .order("submitted_at", { ascending: false });
 
@@ -336,7 +350,7 @@ export default function DashboardView() {
         const { data: allEmployees } = await supabase
           .from("employees")
           .select("id, name")
-          .eq("store_id", currentStore.id)
+          .in("store_id", storeIds)
           .eq("status", "active");
 
         nonRespondents = (allEmployees || [])
@@ -383,7 +397,8 @@ export default function DashboardView() {
     return <XCircle className="w-5 h-5 text-red-600" />;
   };
 
-  if (!currentStore) {
+  const storeIds = getStoreIdsForQuery();
+  if (!storeIds || storeIds.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-muted-foreground">

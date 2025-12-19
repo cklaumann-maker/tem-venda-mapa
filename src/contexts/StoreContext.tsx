@@ -54,7 +54,6 @@ type StoreContextValue = {
   setCurrentStoreId: (id: string) => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
   refresh: () => Promise<void>;
-  // Helper para obter store IDs baseado no modo de visualização
   getStoreIdsForQuery: () => string[] | null;
 };
 

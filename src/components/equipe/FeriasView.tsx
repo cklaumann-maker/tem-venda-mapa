@@ -33,7 +33,7 @@ type Employee = {
 };
 
 export default function FeriasView() {
-  const { currentStore, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [vacations, setVacations] = useState<Vacation[]>([]);
@@ -55,19 +55,22 @@ export default function FeriasView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-      loadVacations();
-    }
-  }, [currentStore, statusFilter]);
+    loadEmployees();
+    loadVacations();
+  }, [getStoreIdsForQuery, viewMode, statusFilter]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active")
         .order("name", { ascending: true });
 
@@ -79,7 +82,13 @@ export default function FeriasView() {
   };
 
   const loadVacations = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setVacations([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -89,7 +98,7 @@ export default function FeriasView() {
           *,
           employees!inner(name)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("start_date", { ascending: false });
 
       if (statusFilter !== "all") {
@@ -153,7 +162,7 @@ export default function FeriasView() {
     try {
       const { error: insertError } = await supabase.from("vacations").insert({
         employee_id: formData.employee_id,
-        store_id: currentStore.id,
+        store_id: currentStoreId!,
         start_date: formData.start_date,
         end_date: formData.end_date,
         days: formData.days,

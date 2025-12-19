@@ -30,7 +30,7 @@ type ScheduleTask = {
 };
 
 export default function CalendarView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
@@ -43,7 +43,9 @@ export default function CalendarView() {
 
   // Função para marcar tarefas perdidas
   const markMissedTasks = useCallback(async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) return;
+    
     try {
       // Chamar a função do Supabase para marcar tarefas perdidas
       const { error } = await supabase.rpc('mark_missed_tasks_today');
@@ -54,17 +56,21 @@ export default function CalendarView() {
     } catch (error) {
       console.error("Erro ao marcar tarefas perdidas:", error);
     }
-  }, [currentStore, supabase]);
+  }, [getStoreIdsForQuery, viewMode, supabase]);
 
   useEffect(() => {
-    if (currentStore) {
-      markMissedTasks();
-      loadTasks();
-    }
-  }, [currentStore, currentDate, markMissedTasks]);
+    markMissedTasks();
+    loadTasks();
+  }, [getStoreIdsForQuery, viewMode, currentDate, markMissedTasks]);
 
   const loadTasks = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setTasks([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -78,7 +84,7 @@ export default function CalendarView() {
           *,
           forms!inner(id, title)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("scheduled_date", startOfMonth)
         .lte("scheduled_date", endOfMonth)
         .order("scheduled_datetime", { ascending: true });
@@ -100,7 +106,8 @@ export default function CalendarView() {
   };
 
   const updateTaskStatus = async (taskId: string, newStatus: string) => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) return;
     try {
       const updateData: any = { status: newStatus };
       if (newStatus === "completed") {
@@ -240,7 +247,8 @@ export default function CalendarView() {
 
   const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-  if (!currentStore) {
+  const storeIds = getStoreIdsForQuery();
+  if (!storeIds || storeIds.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-muted-foreground">

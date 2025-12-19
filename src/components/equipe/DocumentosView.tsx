@@ -43,7 +43,7 @@ const DOCUMENT_TYPES = [
 ];
 
 export default function DocumentosView() {
-  const { currentStore, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -66,19 +66,22 @@ export default function DocumentosView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-      loadDocuments();
-    }
-  }, [currentStore, employeeFilter, typeFilter, expiringFilter]);
+    loadEmployees();
+    loadDocuments();
+  }, [getStoreIdsForQuery, viewMode, employeeFilter, typeFilter, expiringFilter]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("name", { ascending: true });
 
       if (fetchError) throw fetchError;
@@ -89,7 +92,13 @@ export default function DocumentosView() {
   };
 
   const loadDocuments = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setDocuments([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -99,7 +108,7 @@ export default function DocumentosView() {
           *,
           employees!inner(name)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("uploaded_at", { ascending: false });
 
       if (employeeFilter !== "all") {
@@ -196,7 +205,7 @@ export default function DocumentosView() {
       // Salvar registro do documento
       const { error: insertError } = await supabase.from("employee_documents").insert({
         employee_id: formData.employee_id,
-        store_id: currentStore.id,
+        store_id: currentStoreId!,
         document_type: formData.document_type,
         document_name: formData.document_name.trim(),
         file_url: fileUrl,

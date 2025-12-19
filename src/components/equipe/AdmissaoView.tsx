@@ -41,7 +41,7 @@ const ADMISSION_CHECKLIST = [
 ];
 
 export default function AdmissaoView() {
-  const { currentStore, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [admissions, setAdmissions] = useState<Admission[]>([]);
@@ -59,19 +59,22 @@ export default function AdmissaoView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-      loadAdmissions();
-    }
-  }, [currentStore]);
+    loadEmployees();
+    loadAdmissions();
+  }, [getStoreIdsForQuery, viewMode]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("name", { ascending: true });
 
       if (fetchError) throw fetchError;
@@ -82,7 +85,13 @@ export default function AdmissaoView() {
   };
 
   const loadAdmissions = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setAdmissions([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -92,7 +101,7 @@ export default function AdmissaoView() {
           *,
           employees(name)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("started_at", { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -114,7 +123,7 @@ export default function AdmissaoView() {
 
   const handleStartAdmission = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentStore || !user || !formData.employee_id) return;
+    if (!currentStoreId || !user || !formData.employee_id) return;
 
     setSaving(true);
     setError(null);
@@ -122,7 +131,7 @@ export default function AdmissaoView() {
     try {
       const { error: insertError } = await supabase.from("admissions").insert({
         employee_id: formData.employee_id,
-        store_id: currentStore.id,
+        store_id: currentStoreId,
         status: "in_progress",
         checklist: {},
         created_by: user.id,

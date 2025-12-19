@@ -29,7 +29,7 @@ type Employee = {
 };
 
 export default function PontoView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [records, setRecords] = useState<TimeRecord[]>([]);
@@ -48,19 +48,22 @@ export default function PontoView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-      loadRecords();
-    }
-  }, [currentStore, periodFilter]);
+    loadEmployees();
+    loadRecords();
+  }, [getStoreIdsForQuery, viewMode, periodFilter, selectedEmployee]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active")
         .order("name", { ascending: true });
 
@@ -75,7 +78,19 @@ export default function PontoView() {
   };
 
   const loadRecords = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setRecords([]);
+      setSummary({
+        totalHours: 0,
+        overtimeHours: 0,
+        absences: 0,
+        lateCount: 0,
+      });
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -102,16 +117,21 @@ export default function PontoView() {
           break;
       }
 
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from("time_records")
         .select(`
           *,
           employees!inner(name)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("record_date", startDate.toISOString().split("T")[0])
-        .lte("record_date", endDate.toISOString().split("T")[0])
-        .order("record_date", { ascending: false });
+        .lte("record_date", endDate.toISOString().split("T")[0]);
+
+      if (selectedEmployee) {
+        query = query.eq("employee_id", selectedEmployee);
+      }
+
+      const { data, error: fetchError } = await query.order("record_date", { ascending: false });
 
       if (fetchError) throw fetchError;
 
@@ -185,7 +205,7 @@ export default function PontoView() {
         } else {
           const { error: insertError } = await supabase.from("time_records").insert({
             employee_id: selectedEmployee,
-            store_id: currentStore.id,
+            store_id: currentStoreId!,
             record_date: dateStr,
             entry_time: timeStr,
             status: "present",

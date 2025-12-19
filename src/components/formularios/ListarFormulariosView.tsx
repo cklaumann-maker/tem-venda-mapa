@@ -29,7 +29,7 @@ export default function ListarFormulariosView({
   onEdit?: (formId: string) => void;
   onRespond?: (formId: string) => void;
 }) {
-  const { currentStore, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, isAdmin } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [forms, setForms] = useState<Form[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,20 +39,23 @@ export default function ListarFormulariosView({
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
-    if (currentStore) {
-      loadForms();
-    }
-  }, [currentStore, categoryFilter, statusFilter]);
+    loadForms();
+  }, [getStoreIdsForQuery, viewMode, categoryFilter, statusFilter]);
 
   const loadForms = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setForms([]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       let query = supabase
         .from("forms")
         .select("*")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("created_at", { ascending: false });
 
       if (statusFilter === "active") {
@@ -78,7 +81,6 @@ export default function ListarFormulariosView({
   };
 
   const handleToggleActive = async (formId: string, currentStatus: boolean) => {
-    if (!currentStore) return;
     setError(null);
     try {
       const { error: updateError } = await supabase
@@ -109,14 +111,22 @@ export default function ListarFormulariosView({
   };
 
   const handleDuplicate = async (form: Form) => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setError("Nenhuma loja disponível para duplicar o formulário.");
+      return;
+    }
+
     setError(null);
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
+      // Usar a primeira loja disponível (ou a loja atual se em modo store)
+      const targetStoreId = storeIds[0];
+
       const duplicateForm = {
-        store_id: currentStore.id,
+        store_id: targetStoreId,
         title: `${form.title} (Cópia)`,
         description: form.description,
         category: form.category,
@@ -156,7 +166,8 @@ export default function ListarFormulariosView({
     { value: "other", label: "Outro" },
   ];
 
-  if (!currentStore) {
+  const storeIds = getStoreIdsForQuery();
+  if (!storeIds || storeIds.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-muted-foreground">

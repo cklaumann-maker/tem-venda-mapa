@@ -54,7 +54,7 @@ const TERMINATION_TYPES = [
 ];
 
 export default function RescisaoView() {
-  const { currentStore, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [terminations, setTerminations] = useState<Termination[]>([]);
@@ -74,19 +74,22 @@ export default function RescisaoView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-      loadTerminations();
-    }
-  }, [currentStore]);
+    loadEmployees();
+    loadTerminations();
+  }, [getStoreIdsForQuery, viewMode]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name, hire_date, salary_base")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active")
         .order("name", { ascending: true });
 
@@ -98,7 +101,13 @@ export default function RescisaoView() {
   };
 
   const loadTerminations = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setTerminations([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -108,7 +117,7 @@ export default function RescisaoView() {
           *,
           employees!inner(name)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("termination_date", { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -180,7 +189,7 @@ export default function RescisaoView() {
 
   const handleStartTermination = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentStore || !user || !formData.employee_id) return;
+    if (!currentStoreId || !user || !formData.employee_id) return;
 
     const employee = employees.find((e) => e.id === formData.employee_id);
     const calculations = calculateSeverance(employee, formData.termination_type, formData.termination_date);
@@ -191,7 +200,7 @@ export default function RescisaoView() {
     try {
       const { error: insertError } = await supabase.from("terminations").insert({
         employee_id: formData.employee_id,
-        store_id: currentStore.id,
+        store_id: currentStoreId!,
         termination_date: formData.termination_date,
         termination_type: formData.termination_type,
         reason: formData.reason.trim(),

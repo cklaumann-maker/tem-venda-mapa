@@ -27,7 +27,7 @@ type ReportData = {
 };
 
 export default function RelatoriosView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -38,13 +38,17 @@ export default function RelatoriosView() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
-    if (currentStore) {
-      loadReportData();
-    }
-  }, [currentStore, period, startDate, endDate]);
+    loadReportData();
+  }, [getStoreIdsForQuery, viewMode, period, startDate, endDate]);
 
   const loadReportData = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setReportData(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -82,19 +86,19 @@ export default function RelatoriosView() {
       const { count: totalEmployees } = await supabase
         .from("employees")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id);
+        .in("store_id", storeIds);
 
       const { count: activeEmployees } = await supabase
         .from("employees")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active");
 
       // Novas admissões
       const { count: newHires } = await supabase
         .from("employees")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("hire_date", startStr)
         .lte("hire_date", endStr);
 
@@ -102,7 +106,7 @@ export default function RelatoriosView() {
       const { count: terminations } = await supabase
         .from("terminations")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("termination_date", startStr)
         .lte("termination_date", endStr);
 
@@ -110,7 +114,7 @@ export default function RelatoriosView() {
       const { count: totalShifts } = await supabase
         .from("employee_shifts")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("shift_date", startStr)
         .lte("shift_date", endStr);
 
@@ -118,7 +122,7 @@ export default function RelatoriosView() {
       const { data: timeRecords } = await supabase
         .from("time_records")
         .select("total_hours, overtime_hours")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("record_date", startStr)
         .lte("record_date", endStr);
 
@@ -129,7 +133,7 @@ export default function RelatoriosView() {
       const { count: pendingVacations } = await supabase
         .from("vacations")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "requested")
         .gte("start_date", startStr)
         .lte("end_date", endStr);
@@ -137,7 +141,7 @@ export default function RelatoriosView() {
       const { count: approvedVacations } = await supabase
         .from("vacations")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "approved")
         .gte("start_date", startStr)
         .lte("end_date", endStr);
@@ -146,7 +150,7 @@ export default function RelatoriosView() {
       const { count: pendingOvertime } = await supabase
         .from("overtime_requests")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "pending")
         .gte("request_date", startStr)
         .lte("request_date", endStr);
@@ -154,7 +158,7 @@ export default function RelatoriosView() {
       const { count: approvedOvertime } = await supabase
         .from("overtime_requests")
         .select("*", { count: "exact", head: true })
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "approved")
         .gte("request_date", startStr)
         .lte("request_date", endStr);
@@ -163,7 +167,7 @@ export default function RelatoriosView() {
       const { data: reviews } = await supabase
         .from("performance_reviews")
         .select("scores")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .gte("review_date", startStr)
         .lte("review_date", endStr);
 
@@ -242,7 +246,8 @@ export default function RelatoriosView() {
     document.body.removeChild(link);
   };
 
-  if (!currentStore) {
+  const storeIds = getStoreIdsForQuery();
+  if (!storeIds || storeIds.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-muted-foreground">

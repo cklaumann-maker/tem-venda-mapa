@@ -34,7 +34,7 @@ type Employee = {
 };
 
 export default function HorasExtrasView() {
-  const { currentStore, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [requests, setRequests] = useState<OvertimeRequest[]>([]);
@@ -57,19 +57,22 @@ export default function HorasExtrasView() {
   });
 
   useEffect(() => {
-    if (currentStore) {
-      loadEmployees();
-      loadRequests();
-    }
-  }, [currentStore, statusFilter]);
+    loadEmployees();
+    loadRequests();
+  }, [getStoreIdsForQuery, viewMode, statusFilter]);
 
   const loadEmployees = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setEmployees([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("employees")
         .select("id, name")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("status", "active")
         .order("name", { ascending: true });
 
@@ -81,7 +84,13 @@ export default function HorasExtrasView() {
   };
 
   const loadRequests = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -91,7 +100,7 @@ export default function HorasExtrasView() {
           *,
           employees!inner(name)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("request_date", { ascending: false })
         .order("created_at", { ascending: false });
 
@@ -139,7 +148,7 @@ export default function HorasExtrasView() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentStore || !user || !formData.employee_id) return;
+    if (!currentStoreId || !user || !formData.employee_id) return;
 
     if (formData.hours <= 0) {
       setError("As horas devem ser maiores que zero.");
@@ -155,7 +164,7 @@ export default function HorasExtrasView() {
 
       const { error: insertError } = await supabase.from("overtime_requests").insert({
         employee_id: formData.employee_id,
-        store_id: currentStore.id,
+        store_id: currentStoreId!,
         request_date: formData.request_date,
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),

@@ -18,16 +18,14 @@ type ScheduleTask = {
 };
 
 export default function PendingFormsWidget() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (currentStore) {
-      loadTodayTasks();
-    }
-  }, [currentStore]);
+    loadTodayTasks();
+  }, [getStoreIdsForQuery, viewMode]);
 
   // Função para formatar data para YYYY-MM-DD sem problemas de timezone
   const formatDateToYYYYMMDD = (date: Date) => {
@@ -38,7 +36,12 @@ export default function PendingFormsWidget() {
   };
 
   const loadTodayTasks = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setTasks([]);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -54,7 +57,7 @@ export default function PendingFormsWidget() {
           status,
           forms!inner(id, title)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .eq("scheduled_date", todayStr)
         .in("status", ["pending", "missed"])
         .order("scheduled_time", { ascending: true })
@@ -80,7 +83,6 @@ export default function PendingFormsWidget() {
   };
 
   const updateTaskStatus = async (taskId: string, newStatus: string) => {
-    if (!currentStore) return;
     try {
       const updateData: any = { status: newStatus };
       if (newStatus === "completed") {
@@ -124,7 +126,6 @@ export default function PendingFormsWidget() {
     }
   };
 
-  if (!currentStore) return null;
 
   return (
     <Card className="bg-white/85 backdrop-blur border border-white/60 shadow-sm w-full lg:w-[320px] flex-shrink-0 rounded-2xl">

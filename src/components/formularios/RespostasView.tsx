@@ -22,7 +22,7 @@ type FormResponse = {
 };
 
 export default function RespostasView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery, viewMode } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [responses, setResponses] = useState<FormResponse[]>([]);
   const [forms, setForms] = useState<{ id: string; title: string }[]>([]);
@@ -34,19 +34,22 @@ export default function RespostasView() {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    if (currentStore) {
-      loadForms();
-      loadResponses();
-    }
-  }, [currentStore, formFilter]);
+    loadForms();
+    loadResponses();
+  }, [getStoreIdsForQuery, viewMode, formFilter]);
 
   const loadForms = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setForms([]);
+      return;
+    }
+
     try {
       const { data, error: fetchError } = await supabase
         .from("forms")
         .select("id, title")
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("title", { ascending: true });
 
       if (fetchError) throw fetchError;
@@ -57,7 +60,13 @@ export default function RespostasView() {
   };
 
   const loadResponses = async () => {
-    if (!currentStore) return;
+    const storeIds = getStoreIdsForQuery();
+    if (!storeIds || storeIds.length === 0) {
+      setResponses([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -67,7 +76,7 @@ export default function RespostasView() {
           *,
           forms!inner(id, title)
         `)
-        .eq("store_id", currentStore.id)
+        .in("store_id", storeIds)
         .order("submitted_at", { ascending: false });
 
       if (formFilter !== "all") {
@@ -158,7 +167,8 @@ export default function RespostasView() {
     return matchesSearch;
   });
 
-  if (!currentStore) {
+  const storeIds = getStoreIdsForQuery();
+  if (!storeIds || storeIds.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-muted-foreground">

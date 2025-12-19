@@ -77,7 +77,7 @@ const DEFAULT_NOTIFICATION_TEMPLATE = `📋 *Nova Resposta de Formulário*
 {respostas}`;
 
 export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => void }) {
-  const { currentStore, isAdmin } = useStore();
+  const { currentStoreId, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [saving, setSaving] = useState(false);
@@ -161,7 +161,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentStore || !user) return;
+    if (!currentStoreId || !user) return;
 
     // Validações
     if (!formData.title.trim()) {
@@ -184,8 +184,13 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
     setError(null);
 
     try {
+      if (!currentStoreId) {
+        setError("Selecione uma loja para criar o formulário.");
+        return;
+      }
+
       const payload: any = {
-        store_id: currentStore.id,
+        store_id: currentStoreId,
         title: formData.title.trim(),
         description: formData.description.trim() || null,
         category: formData.category,
@@ -246,7 +251,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
 
   // Função para criar tarefas agendadas
   const createScheduledTasks = async (formId: string) => {
-    if (!currentStore || !formData.schedule_enabled) return;
+    if (!currentStoreId || !formData.schedule_enabled) return;
 
     const tasks: any[] = [];
     const startDate = new Date(formData.schedule_start_date);
@@ -282,7 +287,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
 
         tasks.push({
           form_id: formId,
-          store_id: currentStore.id,
+          store_id: currentStoreId!,
           scheduled_date: currentDate.toISOString().split("T")[0],
           scheduled_time: formData.schedule_time,
           scheduled_datetime: scheduledDateTime.toISOString(),
@@ -305,7 +310,7 @@ export default function CriarFormularioView({ onSuccess }: { onSuccess?: () => v
     }
   };
 
-  if (!currentStore) {
+  if (!currentStoreId) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-muted-foreground">

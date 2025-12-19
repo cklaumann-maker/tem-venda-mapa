@@ -875,7 +875,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
           <button
             key={v.key}
             onClick={() => go(v.key)}
-            className="group rounded-2xl border-2 border-gray-100 bg-white hover:border-emerald-200 hover:bg-emerald-50 transition-all duration-300 shadow-sm hover:shadow-lg p-4 lg:p-6 text-left w-full focus:outline-none focus:ring-4 focus:ring-emerald-100 transform hover:scale-[1.01]"
+            className="group rounded-2xl border-2 border-gray-100 bg-white hover:border-emerald-200 hover:bg-emerald-50 transition-all duration-300 shadow-sm hover:shadow-lg p-4 lg:p-6 text-left w-full focus:outline-none focus:ring-4 focus:ring-emerald-100 transform hover:scale-[1.01] cursor-pointer"
             aria-label={`Abrir ${v.title}`}
           >
             <div className="flex items-start gap-3 lg:gap-4">
@@ -941,22 +941,22 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
         style={{ backgroundColor: "rgba(255, 255, 255, 0.6)" }}
         aria-hidden="true"
       />
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm">
+      <header className="sticky top-0 z-50 bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
-          <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
+          <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-2 lg:gap-4">
             {/* Logo e nome da empresa */}
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 min-w-0 flex-shrink-0">
               <Link
                 href="/"
                 onClick={(event) => {
                   event.preventDefault();
                   go("home");
                 }}
-                className="group flex items-center gap-2 rounded-md px-1 sm:px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition flex-shrink-0"
+                className="group flex items-center gap-1.5 sm:gap-2 rounded-md px-1 sm:px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 transition flex-shrink-0"
                 aria-label="Ir para a página inicial"
                 title="Ir para a página inicial"
               >
-                <Logo width={32} height={32} className="sm:w-9 sm:h-9 transition-transform duration-200 group-hover:scale-105 flex-shrink-0" />
+                <Logo width={28} height={28} className="sm:w-8 sm:h-8 lg:w-9 lg:h-9 transition-transform duration-200 group-hover:scale-105 flex-shrink-0" />
                 <div className="hidden sm:flex flex-col leading-tight min-w-0">
                   <span className="text-xs font-medium uppercase tracking-wide truncate" style={{ color: primaryColor }}>
                     Tem Venda
@@ -967,7 +967,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
               
               {/* Logo da loja */}
               <div
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden flex-shrink-0"
+                className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full border bg-white flex items-center justify-center overflow-hidden flex-shrink-0"
                 style={{ borderColor: primaryBorder }}
               >
                 {currentStore?.logoUrl ? (
@@ -978,12 +978,21 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                   </span>
                 )}
               </div>
-
-              {/* Seletor de Empresa/Loja e Modo de Visualização */}
-              <div className="min-w-0 flex-1 hidden md:block">
-                <StoreSelector />
-              </div>
             </div>
+
+            {/* Seletor de Empresa/Loja e Modo de Visualização - Apenas para admins, entre logo e relógio */}
+            {isAdmin && (
+              <>
+                {/* Desktop */}
+                <div className="hidden lg:flex items-center min-w-0 flex-shrink-0 mx-2 xl:mx-4 overflow-hidden">
+                  <StoreSelector />
+                </div>
+                {/* Mobile/Tablet */}
+                <div className="lg:hidden flex-shrink-0 min-w-0 max-w-[140px] sm:max-w-[200px] md:max-w-[260px] overflow-hidden mx-1">
+                  <StoreSelector />
+                </div>
+              </>
+            )}
 
             {/* Menu direito - Data/Hora e ações */}
             <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 flex-shrink-0">
@@ -1149,7 +1158,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                         event.preventDefault();
                         go(view.key);
                       }}
-                      className="group flex flex-col items-center gap-2 p-4 rounded-xl border border-emerald-100 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 hover:shadow-md hover:scale-105"
+                      className="group flex flex-col items-center gap-2 p-4 rounded-xl border border-emerald-100 bg-white hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 hover:shadow-md hover:scale-105 cursor-pointer"
                     >
                       <div className="p-2 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 transition-colors">
                         <view.icon className="w-5 h-5 text-emerald-600" />
@@ -1281,7 +1290,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-              <button onClick={() => go("home")} className="hover:text-green-600 transition-colors flex items-center gap-1">
+              <button onClick={() => go("home")} className="hover:text-green-600 transition-colors flex items-center gap-1 cursor-pointer">
                 🏠 Home
               </button>
               <span>›</span>
@@ -1340,7 +1349,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                     key={view.key}
                     type="button"
                     onClick={() => go(view.key)}
-                    className="text-sm text-muted-foreground rounded-full px-4 py-2 border transition-all duration-200 hover:-translate-y-0.5"
+                    className="text-sm text-muted-foreground rounded-full px-4 py-2 border transition-all duration-200 hover:-translate-y-0.5 cursor-pointer"
                     style={{
                       borderColor: primaryBorder,
                       backgroundColor: hexToRgba(primaryColor, 0.06),

@@ -14,11 +14,12 @@ import DashboardView from "./DashboardView";
 import CalendarView from "./CalendarView";
 
 export default function FormulariosView() {
-  const { currentStore } = useStore();
+  const { getStoreIdsForQuery } = useStore();
   const [activeTab, setActiveTab] = useState<string>("listar");
   const [respondingFormId, setRespondingFormId] = useState<string | null>(null);
 
-  if (!currentStore) {
+  const storeIds = getStoreIdsForQuery();
+  if (!storeIds || storeIds.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-muted-foreground">
