@@ -53,7 +53,7 @@ const REVIEW_PERIODS = [
 ];
 
 export default function PerformanceView() {
-  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [reviews, setReviews] = useState<PerformanceReview[]>([]);

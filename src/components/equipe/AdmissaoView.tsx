@@ -41,7 +41,7 @@ const ADMISSION_CHECKLIST = [
 ];
 
 export default function AdmissaoView() {
-  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [admissions, setAdmissions] = useState<Admission[]>([]);

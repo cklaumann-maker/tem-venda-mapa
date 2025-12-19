@@ -28,7 +28,7 @@ type Employee = {
 };
 
 export default function ColaboradoresView() {
-  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [employees, setEmployees] = useState<Employee[]>([]);

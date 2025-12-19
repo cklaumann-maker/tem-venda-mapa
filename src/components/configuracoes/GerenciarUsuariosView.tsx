@@ -89,6 +89,8 @@ export function GerenciarUsuariosView() {
       setInvites(data || []);
     } catch (err: any) {
       console.error("Erro ao carregar convites:", err);
+      setError(err?.message || "Erro ao carregar convites. Tente novamente.");
+      setInvites([]); // Garantir que o estado seja limpo em caso de erro
     }
   };
 

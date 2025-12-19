@@ -28,7 +28,7 @@ type Employee = {
 };
 
 export default function EscalasView() {
-  const { getStoreIdsForQuery, viewMode, currentStoreId } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [currentDate, setCurrentDate] = useState(new Date());

@@ -43,7 +43,7 @@ const DOCUMENT_TYPES = [
 ];
 
 export default function DocumentosView() {
-  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [documents, setDocuments] = useState<Document[]>([]);

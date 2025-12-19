@@ -28,10 +28,6 @@ export default function EquipeView() {
   });
   const [loadingMetrics, setLoadingMetrics] = useState(false);
 
-  useEffect(() => {
-    loadMetrics();
-  }, [getStoreIdsForQuery, viewMode]);
-
   const loadMetrics = async () => {
     const storeIds = getStoreIdsForQuery();
     if (!storeIds || storeIds.length === 0) {
@@ -91,6 +87,11 @@ export default function EquipeView() {
       setLoadingMetrics(false);
     }
   };
+
+  useEffect(() => {
+    loadMetrics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getStoreIdsForQuery, viewMode]);
 
   return (
     <div className="space-y-6">

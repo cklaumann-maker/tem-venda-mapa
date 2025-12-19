@@ -34,7 +34,7 @@ type Employee = {
 };
 
 export default function HorasExtrasView() {
-  const { getStoreIdsForQuery, viewMode, currentStoreId, isAdmin } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore, isAdmin } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [requests, setRequests] = useState<OvertimeRequest[]>([]);

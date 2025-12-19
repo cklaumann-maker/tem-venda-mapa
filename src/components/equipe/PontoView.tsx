@@ -29,7 +29,7 @@ type Employee = {
 };
 
 export default function PontoView() {
-  const { getStoreIdsForQuery, viewMode, currentStoreId } = useStore();
+  const { getStoreIdsForQuery, viewMode, currentStoreId, currentStore } = useStore();
   const { user } = useAuth();
   const supabase = useMemo(() => supabaseClient(), []);
   const [records, setRecords] = useState<TimeRecord[]>([]);
