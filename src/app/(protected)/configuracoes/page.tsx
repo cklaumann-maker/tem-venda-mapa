@@ -26,7 +26,7 @@ const configOptions = [
     description: "Gerencie papéis, convites e permissões de usuários.",
     icon: Users2,
     href: "/configuracoes/acessos",
-    status: "Em construção",
+    status: "Disponível",
   },
   {
     title: "Integrações",

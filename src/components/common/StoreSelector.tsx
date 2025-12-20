@@ -14,11 +14,9 @@ export function StoreSelector() {
     stores,
     currentCompanyId,
     currentStoreId,
-    viewMode,
-    canViewNetwork,
+    isAdmin,
     setCurrentCompanyId,
     setCurrentStoreId,
-    setViewMode,
   } = useStore();
 
   if (loading) {
@@ -40,16 +38,16 @@ export function StoreSelector() {
 
   return (
     <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap max-w-full">
-      {/* Seletor de Empresa (apenas se houver mais de uma) */}
+      {/* Seletor de Rede (apenas se houver mais de uma) */}
       {companies.length > 1 && (
         <div className="flex items-center gap-1 min-w-0">
-          <Building2 className="hidden sm:block w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          <Network className="hidden sm:block w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           <Select
             value={currentCompanyId ?? ""}
             onValueChange={(value) => setCurrentCompanyId(value)}
           >
             <SelectTrigger className="w-[120px] sm:w-[140px] lg:w-[160px] h-7 sm:h-8 text-xs">
-              <SelectValue placeholder="Empresa" />
+              <SelectValue placeholder="Rede" />
             </SelectTrigger>
             <SelectContent>
               {companies.map((company) => (
@@ -74,6 +72,9 @@ export function StoreSelector() {
             <SelectValue placeholder="Loja" />
           </SelectTrigger>
           <SelectContent>
+            {isAdmin && stores.length > 1 && (
+              <SelectItem value="all">Todas as lojas</SelectItem>
+            )}
             {stores.map((store) => (
               <SelectItem key={store.id} value={store.id}>
                 {store.name}
@@ -82,46 +83,6 @@ export function StoreSelector() {
           </SelectContent>
         </Select>
       </div>
-
-      {/* Toggle de Modo de Visualização (apenas para gerentes/admins) */}
-      {canViewNetwork && stores.length > 1 && (
-        <div className="flex items-center gap-0.5 border rounded-md p-0.5 flex-shrink-0">
-          <Button
-            type="button"
-            variant={viewMode === "store" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("store")}
-            className={cn(
-              "h-6 sm:h-7 px-1.5 sm:px-2 text-xs",
-              viewMode === "store" && "bg-primary text-primary-foreground"
-            )}
-          >
-            <Store className="w-3 h-3" />
-            <span className="hidden md:inline ml-1">Loja</span>
-          </Button>
-          <Button
-            type="button"
-            variant={viewMode === "network" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("network")}
-            className={cn(
-              "h-6 sm:h-7 px-1.5 sm:px-2 text-xs",
-              viewMode === "network" && "bg-primary text-primary-foreground"
-            )}
-          >
-            <Network className="w-3 h-3" />
-            <span className="hidden md:inline ml-1">Rede</span>
-          </Button>
-        </div>
-      )}
-
-      {/* Indicador de modo atual - oculto em mobile */}
-      {viewMode === "network" && (
-        <div className="hidden xl:flex text-xs text-muted-foreground items-center gap-1 min-w-0">
-          <Network className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate">Visualizando todas as lojas de {currentCompany?.name}</span>
-        </div>
-      )}
     </div>
   );
 }

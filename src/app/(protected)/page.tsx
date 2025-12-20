@@ -428,8 +428,8 @@ type DashboardShellProps = {
 function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user } = useAuth();
-  const { loading: storeLoading, stores, currentStore, setCurrentStoreId, isAdmin } = useStore();
+  const { user, signOut } = useAuth();
+  const { loading: storeLoading, stores, currentStore, currentStoreId, setCurrentStoreId, isAdmin } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [active, setActive] = useState<string>(initialView);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -903,22 +903,42 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
     );
   }
 
-  if (!stores.length || !currentStore) {
+  // Permitir "Todas as lojas" para admins mesmo sem currentStore
+  const isViewingAllStores = currentStoreId === "all";
+  const hasStores = stores.length > 0;
+  const hasCurrentStore = currentStore !== null;
+  
+  // Só mostrar erro se não tiver lojas OU se não tiver loja atual E não estiver vendo todas as lojas
+  if (!hasStores || (!hasCurrentStore && !isViewingAllStores)) {
+    const handleLogout = async () => {
+      await signOut();
+      router.push("/login");
+    };
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-gray-50">
-        <div className="max-w-md text-center space-y-3 bg-white border rounded-2xl p-8 shadow-sm">
+        <div className="max-w-md text-center space-y-4 bg-white border rounded-2xl p-8 shadow-sm">
           <ShieldCheck className="w-10 h-10 text-amber-500 mx-auto" />
           <h2 className="text-xl font-semibold">Acesso em configuração</h2>
           <p className="text-sm text-muted-foreground">
             Não encontramos nenhuma loja vinculada ao seu usuário. Peça ao administrador ou gerente responsável para concluir o cadastro.
           </p>
-          <Button
-            onClick={() => go("home")}
-            className="text-white hover:opacity-90"
-            style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-          >
-            Tentar novamente
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={() => go("home")}
+              className="text-white hover:opacity-90"
+              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+            >
+              Tentar novamente
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="w-full"
+            >
+              Fazer logout e voltar ao login
+            </Button>
+          </div>
         </div>
       </div>
     );

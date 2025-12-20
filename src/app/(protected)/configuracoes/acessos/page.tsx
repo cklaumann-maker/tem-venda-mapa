@@ -1,7 +1,7 @@
 "use client";
 
 import { DashboardPage } from "../../page";
-import { GerenciarUsuariosView } from "@/components/configuracoes/GerenciarUsuariosView";
+import { PerfisEAcessosView } from "@/components/configuracoes/PerfisEAcessosView";
 
 export default function ConfiguracoesAcessosPage() {
   return (
@@ -11,7 +11,7 @@ export default function ConfiguracoesAcessosPage() {
         "configuracoes-acessos": {
           title: "Configurações · Perfis e Acessos",
           path: "/configuracoes/acessos",
-          component: <GerenciarUsuariosView />,
+          component: <PerfisEAcessosView />,
         },
       }}
     />

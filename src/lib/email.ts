@@ -4,6 +4,7 @@
  */
 
 import { getPasswordResetEmailTemplate } from './email-templates/password-reset';
+import { getUserInviteEmailTemplate } from './email-templates/user-invite';
 
 interface InviteEmailData {
   email: string;
@@ -24,61 +25,32 @@ interface PasswordResetEmailData {
  */
 export async function sendInviteEmail(data: InviteEmailData): Promise<boolean> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    console.log('📧 [sendInviteEmail] Iniciando envio de email...');
+    console.log('📧 [sendInviteEmail] Email destino:', data.email);
+    console.log('📧 [sendInviteEmail] Token:', data.token.substring(0, 10) + '...');
+    
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+    // Codificar o token na URL para evitar problemas com caracteres especiais
+    // IMPORTANTE: encodeURIComponent preserva letras e números, mas alguns clientes de email
+    // podem fazer conversões automáticas (ex: O -> 0). Vamos usar o token diretamente sem encoding
+    // pois o token já é alfanumérico e seguro para URLs
     const activationUrl = `${baseUrl}/ativar-conta?token=${data.token}`;
 
-    const emailSubject = `Convite para ${data.companyName}`;
-    const emailBody = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Convite para ${data.companyName}</title>
-      </head>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-          <h1 style="color: white; margin: 0;">Você foi convidado!</h1>
-        </div>
-        
-        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-          <p style="font-size: 16px; margin-bottom: 20px;">
-            Olá,
-          </p>
-          
-          <p style="font-size: 16px; margin-bottom: 20px;">
-            <strong>${data.inviterName}</strong> convidou você para fazer parte de <strong>${data.companyName}</strong>${data.storeName ? ` - ${data.storeName}` : ''}.
-          </p>
-          
-          <p style="font-size: 16px; margin-bottom: 20px;">
-            Seu cargo será: <strong>${getRoleLabel(data.role)}</strong>
-          </p>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${activationUrl}" 
-               style="display: inline-block; background: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-              Ativar Minha Conta
-            </a>
-          </div>
-          
-          <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
-            Ou copie e cole este link no seu navegador:
-          </p>
-          <p style="font-size: 12px; color: #9ca3af; word-break: break-all; background: #f3f4f6; padding: 10px; border-radius: 4px;">
-            ${activationUrl}
-          </p>
-          
-          <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
-            <strong>Importante:</strong> Este link expira em 7 dias. Após clicar, você precisará definir uma senha para sua conta.
-          </p>
-        </div>
-        
-        <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
-          <p>Se você não esperava este convite, pode ignorar este email.</p>
-        </div>
-      </body>
-      </html>
-    `;
+    console.log('📧 [sendInviteEmail] URL de ativação:', activationUrl);
+    console.log('📧 [sendInviteEmail] Token original:', data.token);
+    console.log('📧 [sendInviteEmail] Token length:', data.token.length);
+
+    const emailSubject = `Você foi convidado para ${data.companyName}`;
+    const emailBody = getUserInviteEmailTemplate({
+      inviterName: data.inviterName,
+      companyName: data.companyName,
+      storeName: data.storeName,
+      role: data.role,
+      activationUrl,
+      userEmail: data.email,
+    });
+
+    console.log('📧 [sendInviteEmail] Chamando API /api/email/send-invite...');
 
     // Chama API route para envio de email
     const response = await fetch('/api/email/send-invite', {
@@ -94,16 +66,36 @@ export async function sendInviteEmail(data: InviteEmailData): Promise<boolean> {
       }),
     });
 
+    console.log('📧 [sendInviteEmail] Resposta recebida. Status:', response.status);
+
     if (!response.ok) {
       const error = await response.json();
-      console.error('Erro ao enviar email de convite:', error);
-      return false;
+      console.error('❌ [sendInviteEmail] Erro ao enviar email de convite:', error);
+      console.error('❌ [sendInviteEmail] Status:', response.status);
+      console.error('❌ [sendInviteEmail] Detalhes:', JSON.stringify(error, null, 2));
+      throw new Error(error.error || `Erro ao enviar email: ${response.status}`);
     }
 
+    const result = await response.json();
+    console.log('✅ [sendInviteEmail] Resposta do servidor:', result);
+    
+    // Se houver aviso na resposta, logar para debug
+    if (result.warning) {
+      console.warn('⚠️ [sendInviteEmail] Aviso:', result.warning);
+    }
+    
+    if (result.note) {
+      console.info('ℹ️ [sendInviteEmail] Nota:', result.note);
+    }
+    
     return true;
   } catch (error) {
-    console.error('Erro ao enviar email de convite:', error);
-    return false;
+    console.error('❌ [sendInviteEmail] Erro ao enviar email de convite:', error);
+    if (error instanceof Error) {
+      console.error('❌ [sendInviteEmail] Mensagem de erro:', error.message);
+      console.error('❌ [sendInviteEmail] Stack:', error.stack);
+    }
+    throw error;
   }
 }
 

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +10,34 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import Logo from "@/components/common/Logo";
 
+function getRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    admin: 'Administrador',
+    manager: 'Gerente',
+    seller: 'Vendedor',
+    finance: 'Financeiro',
+    leader: 'Líder',
+    owner: 'Proprietário',
+  };
+  return labels[role] || role;
+}
+
 export default function AtivarContaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token");
+  
+  // Extrair token da query string, removendo qualquer # no final
+  let token = searchParams.get("token");
+  if (token) {
+    // Remover qualquer # no final
+    if (token.endsWith("#")) {
+      token = token.slice(0, -1);
+    }
+    // Remover espaços em branco
+    token = token.trim();
+    // Não decodificar, pois o token já é alfanumérico e pode causar problemas
+    // com clientes de email que fazem conversões automáticas (O -> 0)
+  }
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -25,41 +48,69 @@ export default function AtivarContaPage() {
 
   useEffect(() => {
     if (token) {
+      console.log("✅ [useEffect] Token extraído da URL");
+      console.log("📋 [useEffect] Token (primeiros 20 chars):", token.substring(0, 20) + "...");
+      console.log("📋 [useEffect] Token (últimos 20 chars):", "..." + token.substring(token.length - 20));
+      console.log("📋 [useEffect] Token length:", token.length);
       loadInviteData();
     } else {
+      console.error("❌ [useEffect] Token não encontrado na URL");
       setError("Token de ativação não fornecido");
     }
   }, [token]);
 
   const loadInviteData = async () => {
     try {
-      const supabase = supabaseClient();
-      const { data, error } = await supabase
-        .from("user_invites")
-        .select("*")
-        .eq("token", token)
-        .single();
-
-      if (error) throw error;
-
-      if (!data) {
-        setError("Convite não encontrado");
+      if (!token) {
+        setError("Token de ativação não fornecido");
         return;
       }
 
-      // Verificar se já foi usado
-      if (data.used_at) {
-        setError("Este convite já foi utilizado");
+      const cleanToken = token.trim();
+      console.log("🔍 [loadInviteData] Buscando convite com token:", cleanToken.substring(0, 20) + "...");
+      console.log("🔍 [loadInviteData] Token completo:", cleanToken);
+      console.log("🔍 [loadInviteData] Token length:", cleanToken.length);
+      
+      // Usar API route server-side para buscar o convite (bypass RLS)
+      const response = await fetch(`/api/invites/verify-token?token=${encodeURIComponent(cleanToken)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("❌ [loadInviteData] Erro na API:", errorData);
+        
+        if (response.status === 404) {
+          setError("Convite não encontrado ou token inválido. Verifique se o convite não foi deletado ou já utilizado.");
+          return;
+        }
+        
+        if (response.status === 400) {
+          setError(errorData.error || "Erro ao verificar convite");
+          return;
+        }
+        
+        throw new Error(errorData.error || 'Erro ao buscar convite');
+      }
+
+      const result = await response.json();
+      console.log("📋 [loadInviteData] Resultado da busca:", result.invite ? "✅ Encontrado" : "❌ Não encontrado");
+      
+      if (!result.invite) {
+        setError("Convite não encontrado ou token inválido. Verifique se o convite não foi deletado ou já utilizado.");
         return;
       }
 
-      // Verificar se expirou
-      if (new Date(data.expires_at) < new Date()) {
-        setError("Este convite expirou. Solicite um novo convite.");
-        return;
-      }
-
-      setInviteData(data);
+      const data = result.invite;
+      
+      // Adicionar token aos dados do convite para usar na ativação
+      setInviteData({
+        ...data,
+        token: cleanToken, // Incluir token para usar na ativação
+      });
     } catch (err: any) {
       console.error("Erro ao carregar convite:", err);
       setError(err.message || "Erro ao carregar convite");
@@ -85,7 +136,7 @@ export default function AtivarContaPage() {
         return;
       }
 
-      // Usar API route para criar usuário (requer service role key)
+      // Usar API route para criar/atualizar usuário e definir senha
       const response = await fetch('/api/users/create', {
         method: 'POST',
         headers: {
@@ -94,13 +145,20 @@ export default function AtivarContaPage() {
         body: JSON.stringify({
           email: inviteData.email,
           password,
-          inviteData,
+          inviteId: inviteData.id,
+          token: token,
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao criar usuário');
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Erro ao criar usuário' };
+        }
+        throw new Error(errorData.error || 'Erro ao ativar conta');
       }
 
       setSuccess(true);
@@ -199,7 +257,7 @@ export default function AtivarContaPage() {
                 <strong>Email:</strong> {inviteData.email}
               </p>
               <p className="text-sm text-muted-foreground">
-                <strong>Cargo:</strong> {inviteData.role}
+                <strong>Cargo:</strong> {getRoleLabel(inviteData.role)}
               </p>
             </div>
           )}

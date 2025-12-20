@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useStore } from "@/contexts/StoreContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,280 +23,292 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { sendInviteEmail } from "@/lib/email";
-import { UserPlus, Mail, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Edit2, Trash2, Power, PowerOff, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 
-interface UserInvite {
+interface User {
   id: string;
   email: string;
+  full_name: string | null;
   role: string;
-  company_id: string | null;
-  store_id: string | null;
-  expires_at: string;
-  used_at: string | null;
-  created_at: string;
-  invited_by: string;
+  network_id: string | null;
+  org_id: string | null;
+  default_store_id: string | null;
+  is_active: boolean;
+  deleted_at: string | null;
+  network_name?: string;
+  store_name?: string;
 }
 
 export function GerenciarUsuariosView() {
   const {
+    networks,
     companies,
     stores,
+    currentNetworkId,
     currentCompanyId,
-    currentStoreId,
     profileRole,
     isAdmin,
     isManager,
   } = useStore();
 
-  const [invites, setInvites] = useState<UserInvite[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const availableNetworks = networks.length > 0 ? networks : companies;
+  const currentNetwork = currentNetworkId || currentCompanyId;
+
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  
+  // Filtros
+  const [filterNetworkId, setFilterNetworkId] = useState<string>("all");
+  const [filterStoreId, setFilterStoreId] = useState<string>("all");
+  const [filterRole, setFilterRole] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("active"); // active, inactive, deleted
 
-  // Form state
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
+  // Dialog de edição
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    full_name: "",
     role: "",
-    companyId: currentCompanyId || "",
-    storeId: currentStoreId || "",
+    network_id: "",
+    store_id: "",
   });
 
-  // Load invites
   useEffect(() => {
-    loadInvites();
-  }, [currentCompanyId]);
+    loadUsers();
+  }, [currentNetwork, isAdmin]);
 
-  const loadInvites = async () => {
-    try {
-      const supabase = supabaseClient();
-      let query = supabase
-        .from("user_invites")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      // Managers só veem convites da sua empresa
-      if (!isAdmin && currentCompanyId) {
-        query = query.eq("company_id", currentCompanyId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setInvites(data || []);
-    } catch (err: any) {
-      console.error("Erro ao carregar convites:", err);
-      setError(err?.message || "Erro ao carregar convites. Tente novamente.");
-      setInvites([]); // Garantir que o estado seja limpo em caso de erro
+  useEffect(() => {
+    if (users.length > 0) {
+      applyFilters(users);
     }
-  };
+  }, [filterNetworkId, filterStoreId, filterRole, filterStatus, users, isAdmin]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  const loadUsers = async () => {
     setLoading(true);
-
+    setError("");
     try {
       const supabase = supabaseClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error("Usuário não autenticado");
-      }
-
-      // Validar permissões
-      if (!isAdmin && !isManager) {
-        throw new Error("Você não tem permissão para criar usuários");
-      }
-
-      // Managers não podem criar admins ou managers
-      if (!isAdmin && (formData.role === "admin" || formData.role === "manager")) {
-        throw new Error("Gerentes não podem criar administradores ou gerentes");
-      }
-
-      // Validar empresa (managers só podem criar na sua empresa)
-      const finalCompanyId = isAdmin ? formData.companyId : currentCompanyId;
-      if (!finalCompanyId) {
-        throw new Error("Empresa é obrigatória");
-      }
-
-      // Gerar token único (64 caracteres alfanuméricos)
-      const generateToken = () => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let token = '';
-        for (let i = 0; i < 64; i++) {
-          token += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return token;
-      };
-
-      let token = generateToken();
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       
-      // Verificar se o token já existe (improvável, mas por segurança)
-      let attempts = 0;
-      while (attempts < 10) {
-        const { data: existing } = await supabase
-          .from("user_invites")
-          .select("id")
-          .eq("token", token)
-          .maybeSingle();
-        
-        if (!existing) break;
-        token = generateToken();
-        attempts++;
+      if (!currentUser) throw new Error("Usuário não autenticado");
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, network_id, org_id")
+        .eq("id", currentUser.id)
+        .maybeSingle();
+
+      const userRole = profile?.role;
+      const userIsAdmin = userRole === "admin";
+      const userNetworkId = profile?.network_id || profile?.org_id;
+
+      let query = supabase
+        .from("profiles")
+        .select(`
+          id,
+          full_name,
+          role,
+          network_id,
+          org_id,
+          default_store_id,
+          is_active,
+          deleted_at
+        `);
+
+      if (!userIsAdmin && userNetworkId) {
+        query = query.or(`network_id.eq.${userNetworkId},org_id.eq.${userNetworkId}`);
       }
 
-      // Data de expiração (7 dias)
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      const { data, error } = await query.order("full_name", { ascending: true });
 
-      // Criar convite
-      const { data: invite, error: inviteError } = await supabase
-        .from("user_invites")
-        .insert({
-          email: formData.email,
-          invited_by: user.id,
-          company_id: finalCompanyId,
-          store_id: formData.storeId || null,
-          role: formData.role,
-          token,
-          expires_at: expiresAt.toISOString(),
-        })
-        .select()
-        .single();
+      if (error) throw error;
 
-      if (inviteError) throw inviteError;
+      const usersData = (data || []).map((u: any) => {
+        const networkId = u.network_id || u.org_id;
+        const network = availableNetworks.find((n) => n.id === networkId);
+        const store = stores.find((s) => s.id === u.default_store_id);
 
-      // Buscar informações do convidador e empresa
-      const { data: inviterProfile } = await supabase
-        .from("profiles")
-        .select("name")
-        .eq("id", user.id)
-        .single();
-
-      const { data: company } = await supabase
-        .from("orgs")
-        .select("name")
-        .eq("id", finalCompanyId)
-        .single();
-
-      const { data: store } = formData.storeId
-        ? await supabase
-            .from("stores")
-            .select("name")
-            .eq("id", formData.storeId)
-            .single()
-        : { data: null };
-
-      // Enviar email de convite
-      await sendInviteEmail({
-        email: formData.email,
-        token,
-        inviterName: inviterProfile?.name || "Administrador",
-        companyName: company?.name || "Empresa",
-        storeName: store?.name,
-        role: formData.role,
+        return {
+          ...u,
+          email: "", // Será preenchido depois
+          network_name: network?.name || null,
+          store_name: store?.name || null,
+        };
       });
 
-      // Criar perfil temporário (será ativado quando o usuário definir senha)
-      // O usuário será criado no Supabase Auth quando ativar a conta
+      // Buscar emails dos usuários do auth.users
+      const userIds = usersData.map((u: any) => u.id);
+      if (userIds.length > 0) {
+        // Usar API route para buscar emails
+        const response = await fetch('/api/users/get-emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userIds }),
+        });
 
-      setSuccess("Convite enviado com sucesso!");
-      setFormData({
-        name: "",
-        email: "",
-        role: "",
-        companyId: currentCompanyId || "",
-        storeId: currentStoreId || "",
-      });
-      setShowForm(false);
-      loadInvites();
+        if (response.ok) {
+          const { emails } = await response.json();
+          usersData.forEach((u: any) => {
+            u.email = emails[u.id] || "Email não encontrado";
+          });
+        }
+      }
+
+      setUsers(usersData);
     } catch (err: any) {
-      console.error("Erro ao criar convite:", err);
-      setError(err.message || "Erro ao criar convite");
+      console.error("Erro ao carregar usuários:", err);
+      setError(err.message || "Erro ao carregar usuários");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResendInvite = async (invite: UserInvite) => {
+  const applyFilters = (usersToFilter: User[]) => {
+    let filtered = [...usersToFilter];
+
+    if (filterStatus === "active") {
+      filtered = filtered.filter((u) => u.is_active && !u.deleted_at);
+    } else if (filterStatus === "inactive") {
+      filtered = filtered.filter((u) => !u.is_active && !u.deleted_at);
+    } else if (filterStatus === "deleted") {
+      filtered = filtered.filter((u) => u.deleted_at);
+    }
+
+    if (isAdmin && filterNetworkId !== "all") {
+      filtered = filtered.filter(
+        (u) => u.network_id === filterNetworkId || u.org_id === filterNetworkId
+      );
+    }
+
+    if (filterStoreId !== "all") {
+      filtered = filtered.filter((u) => u.default_store_id === filterStoreId);
+    }
+
+    if (filterRole !== "all") {
+      filtered = filtered.filter((u) => u.role === filterRole);
+    }
+
+    setFilteredUsers(filtered);
+  };
+
+  const handleEdit = (user: User) => {
+    setEditingUser(user);
+    setEditFormData({
+      full_name: user.full_name || "",
+      role: user.role,
+      network_id: user.network_id || user.org_id || "",
+      store_id: user.default_store_id || "",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingUser) return;
+
     setLoading(true);
     setError("");
     setSuccess("");
 
     try {
-      const supabase = supabaseClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) throw new Error("Usuário não autenticado");
-
-      // Buscar informações
-      const { data: inviterProfile } = await supabase
-        .from("profiles")
-        .select("name")
-        .eq("id", invite.invited_by)
-        .single();
-
-      const { data: company } = invite.company_id
-        ? await supabase
-            .from("orgs")
-            .select("name")
-            .eq("id", invite.company_id)
-            .single()
-        : { data: null };
-
-      const { data: store } = invite.store_id
-        ? await supabase
-            .from("stores")
-            .select("name")
-            .eq("id", invite.store_id)
-            .single()
-        : { data: null };
-
-      // Reenviar email
-      await sendInviteEmail({
-        email: invite.email,
-        token: invite.id, // Usar ID como token temporário
-        inviterName: inviterProfile?.name || "Administrador",
-        companyName: company?.name || "Empresa",
-        storeName: store?.name,
-        role: invite.role,
+      const response = await fetch('/api/users/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: editingUser.id,
+          ...editFormData,
+        }),
       });
 
-      setSuccess("Convite reenviado com sucesso!");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao atualizar usuário");
+      }
+
+      setSuccess("Usuário atualizado com sucesso!");
+      setEditingUser(null);
+      loadUsers();
     } catch (err: any) {
-      console.error("Erro ao reenviar convite:", err);
-      setError(err.message || "Erro ao reenviar convite");
+      console.error("Erro ao atualizar usuário:", err);
+      setError(err.message || "Erro ao atualizar usuário");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteInvite = async (inviteId: string) => {
-    if (!confirm("Tem certeza que deseja excluir este convite?")) return;
+  const handleToggleActive = async (user: User) => {
+    if (!confirm(`Tem certeza que deseja ${user.is_active ? "desativar" : "reativar"} este usuário?`)) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
 
     try {
-      const supabase = supabaseClient();
-      const { error } = await supabase
-        .from("user_invites")
-        .delete()
-        .eq("id", inviteId);
+      const response = await fetch('/api/users/toggle-active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          isActive: !user.is_active,
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao alterar status do usuário");
+      }
 
-      setSuccess("Convite excluído com sucesso!");
-      loadInvites();
+      setSuccess(`Usuário ${user.is_active ? "desativado" : "reativado"} com sucesso!`);
+      loadUsers();
     } catch (err: any) {
-      console.error("Erro ao excluir convite:", err);
-      setError(err.message || "Erro ao excluir convite");
+      console.error("Erro ao alterar status:", err);
+      setError(err.message || "Erro ao alterar status do usuário");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (user: User) => {
+    if (!confirm("Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch('/api/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao excluir usuário");
+      }
+
+      setSuccess("Usuário excluído com sucesso!");
+      loadUsers();
+    } catch (err: any) {
+      console.error("Erro ao excluir usuário:", err);
+      setError(err.message || "Erro ao excluir usuário");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -312,35 +324,19 @@ export function GerenciarUsuariosView() {
     return labels[role] || role;
   };
 
-  const getRoleBadgeVariant = (role: string) => {
-    if (role === "admin") return "destructive";
-    if (role === "manager") return "default";
-    return "secondary";
-  };
-
-  const availableRoles = isAdmin
-    ? ["admin", "manager", "seller", "finance", "leader", "owner"]
-    : ["seller", "finance", "leader"];
-
-  const availableStores = stores.filter(
-    (s) => !formData.companyId || s.org_id === formData.companyId
-  );
+  const filteredStores = stores.filter((s) => {
+    const selectedNetwork = editFormData.network_id || filterNetworkId;
+    if (selectedNetwork === "all") return true;
+    return (s.networkId || s.companyId) === selectedNetwork;
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Gerenciar Usuários</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Crie e gerencie convites para novos usuários
-          </p>
-        </div>
-        {!showForm && (isAdmin || isManager) && (
-          <Button onClick={() => setShowForm(true)}>
-            <UserPlus className="w-4 h-4 mr-2" />
-            Convidar Usuário
-          </Button>
-        )}
+      <div>
+        <h2 className="text-2xl font-bold">Gerenciar Usuários</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Visualize e gerencie todos os usuários do sistema
+        </p>
       </div>
 
       {error && (
@@ -356,226 +352,300 @@ export function GerenciarUsuariosView() {
         </Alert>
       )}
 
-      {showForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Convidar Novo Usuário</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome Completo</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    required
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    required
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="role">Cargo</Label>
-                  <Select
-                    value={formData.role}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, role: value })
-                    }
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o cargo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableRoles.map((role) => (
-                        <SelectItem key={role} value={role}>
-                          {getRoleLabel(role)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {isAdmin && (
-                  <div className="space-y-2">
-                    <Label htmlFor="companyId">Empresa</Label>
-                    <Select
-                      value={formData.companyId}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, companyId: value, storeId: "" })
-                      }
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a empresa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companies.map((company) => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="storeId">Loja (Opcional)</Label>
-                  <Select
-                    value={formData.storeId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, storeId: value })
-                    }
-                    disabled={loading || !formData.companyId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a loja" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Todas as lojas</SelectItem>
-                      {availableStores.map((store) => (
-                        <SelectItem key={store.id} value={store.id}>
-                          {store.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label>Rede</Label>
+                <Select value={filterNetworkId} onValueChange={setFilterNetworkId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas as redes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as redes</SelectItem>
+                    {availableNetworks.map((network) => (
+                      <SelectItem key={network.id} value={network.id}>
+                        {network.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+            )}
 
-              <div className="flex gap-2">
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Enviando..." : "Enviar Convite"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setShowForm(false);
-                    setFormData({
-                      name: "",
-                      email: "",
-                      role: "",
-                      companyId: currentCompanyId || "",
-                      storeId: currentStoreId || "",
-                    });
-                    setError("");
-                    setSuccess("");
-                  }}
-                  disabled={loading}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+            <div className="space-y-2">
+              <Label>Loja</Label>
+              <Select value={filterStoreId} onValueChange={setFilterStoreId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as lojas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as lojas</SelectItem>
+                  {stores.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cargo</Label>
+              <Select value={filterRole} onValueChange={setFilterRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os cargos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="manager">Gerente</SelectItem>
+                  <SelectItem value="seller">Vendedor</SelectItem>
+                  <SelectItem value="finance">Financeiro</SelectItem>
+                  <SelectItem value="leader">Líder</SelectItem>
+                  <SelectItem value="owner">Proprietário</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativos</SelectItem>
+                  <SelectItem value="inactive">Inativos</SelectItem>
+                  <SelectItem value="deleted">Excluídos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Total: {users.length} usuários</span>
+            <span>•</span>
+            <span>Filtrados: {filteredUsers.length} usuários</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Convites Pendentes</CardTitle>
+          <CardTitle>Usuários</CardTitle>
+          <CardDescription>
+            Lista de todos os usuários cadastrados no sistema
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {invites.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-sm text-muted-foreground">Carregando usuários...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              Nenhum convite pendente
+              Nenhum usuário encontrado
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Cargo</TableHead>
+                  {isAdmin && <TableHead>Rede</TableHead>}
+                  <TableHead>Loja Padrão</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Expira em</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invites.map((invite) => {
-                  const isExpired = new Date(invite.expires_at) < new Date();
-                  const isUsed = invite.used_at !== null;
-
-                  return (
-                    <TableRow key={invite.id}>
-                      <TableCell>{invite.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={getRoleBadgeVariant(invite.role)}>
-                          {getRoleLabel(invite.role)}
+                {filteredUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">
+                      {user.full_name || "Sem nome"}
+                    </TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={user.role === "admin" ? "destructive" : "default"}>
+                        {getRoleLabel(user.role)}
+                      </Badge>
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>{user.network_name || "-"}</TableCell>
+                    )}
+                    <TableCell>{user.store_name || "Nenhuma"}</TableCell>
+                    <TableCell>
+                      {user.deleted_at ? (
+                        <Badge variant="outline" className="bg-red-50">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          Excluído
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {isUsed ? (
-                          <Badge variant="outline" className="bg-green-50">
-                            <CheckCircle2 className="w-3 h-3 mr-1" />
-                            Usado
-                          </Badge>
-                        ) : isExpired ? (
-                          <Badge variant="outline" className="bg-red-50">
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Expirado
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-yellow-50">
-                            <Clock className="w-3 h-3 mr-1" />
-                            Pendente
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(invite.expires_at).toLocaleDateString("pt-BR")}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          {!isUsed && !isExpired && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleResendInvite(invite)}
-                              disabled={loading}
-                            >
-                              <Mail className="w-3 h-3 mr-1" />
-                              Reenviar
-                            </Button>
-                          )}
+                      ) : user.is_active ? (
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          Ativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-yellow-50">
+                          <AlertCircle className="w-3 h-3 mr-1" />
+                          Inativo
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEdit(user)}
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </Button>
+
+                        {!user.deleted_at && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleDeleteInvite(invite.id)}
+                            onClick={() => handleToggleActive(user)}
                             disabled={loading}
                           >
-                            <Trash2 className="w-3 h-3 text-red-600" />
+                            {user.is_active ? (
+                              <PowerOff className="w-3 h-3 text-yellow-600" />
+                            ) : (
+                              <Power className="w-3 h-3 text-green-600" />
+                            )}
                           </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                        )}
+
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(user)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="w-3 h-3 text-red-600" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
+
+      {editingUser && (
+        <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Usuário</DialogTitle>
+              <DialogDescription>
+                Altere as informações do usuário
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nome</Label>
+                <Input
+                  value={editFormData.full_name}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, full_name: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Cargo</Label>
+                <Select
+                  value={editFormData.role}
+                  onValueChange={(value) =>
+                    setEditFormData({ ...editFormData, role: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {isAdmin ? (
+                      <>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                        <SelectItem value="manager">Gerente</SelectItem>
+                        <SelectItem value="seller">Vendedor</SelectItem>
+                        <SelectItem value="finance">Financeiro</SelectItem>
+                        <SelectItem value="leader">Líder</SelectItem>
+                        <SelectItem value="owner">Proprietário</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="seller">Vendedor</SelectItem>
+                        <SelectItem value="finance">Financeiro</SelectItem>
+                        <SelectItem value="leader">Líder</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              {isAdmin && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Rede</Label>
+                    <Select
+                      value={editFormData.network_id}
+                      onValueChange={(value) =>
+                        setEditFormData({ ...editFormData, network_id: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableNetworks.map((network) => (
+                          <SelectItem key={network.id} value={network.id}>
+                            {network.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Loja Padrão</Label>
+                    <Select
+                      value={editFormData.store_id}
+                      onValueChange={(value) =>
+                        setEditFormData({ ...editFormData, store_id: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Nenhuma</SelectItem>
+                        {filteredStores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setEditingUser(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={loading}>Salvar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
-

@@ -13,7 +13,7 @@ type StoreBranding = {
   supportPhone?: string | null;
 };
 
-type CompanySummary = {
+type NetworkSummary = {
   id: string;
   name: string;
 };
@@ -21,8 +21,10 @@ type CompanySummary = {
 type StoreSummary = {
   id: string;
   name: string;
-  companyId?: string | null;
-  companyName?: string | null;
+  networkId?: string | null; // Nova: network_id
+  networkName?: string | null; // Nova: nome da rede
+  companyId?: string | null; // Compatibilidade: mantém org_id/company_id temporariamente
+  companyName?: string | null; // Compatibilidade: mantém nome da empresa temporariamente
   logoUrl?: string | null;
   storeRole?: string | null;
   isActive?: boolean;
@@ -33,16 +35,19 @@ type ProfileInfo = {
   full_name: string | null;
   role: string | null;
   default_store_id: string | null;
-  org_id: string | null;
+  org_id: string | null; // Compatibilidade: manter temporariamente
+  network_id: string | null; // Nova: network_id
 };
 
 type ViewMode = "network" | "store";
 
 type StoreContextValue = {
   loading: boolean;
-  companies: CompanySummary[];
+  networks: NetworkSummary[]; // Nova: networks
+  companies: NetworkSummary[]; // Compatibilidade: alias para networks
   stores: StoreSummary[];
-  currentCompanyId: string | null;
+  currentNetworkId: string | null; // Nova: network_id
+  currentCompanyId: string | null; // Compatibilidade: alias para currentNetworkId
   currentStoreId: string | null;
   currentStore: StoreSummary | null;
   viewMode: ViewMode;
@@ -50,7 +55,8 @@ type StoreContextValue = {
   isAdmin: boolean;
   isManager: boolean;
   canViewNetwork: boolean;
-  setCurrentCompanyId: (id: string | null) => Promise<void>;
+  setCurrentNetworkId: (id: string | null) => Promise<void>; // Nova
+  setCurrentCompanyId: (id: string | null) => Promise<void>; // Compatibilidade
   setCurrentStoreId: (id: string) => Promise<void>;
   setViewMode: (mode: ViewMode) => void;
   refresh: () => Promise<void>;
@@ -66,20 +72,20 @@ interface StoreProviderProps {
 export function StoreProvider({ children }: StoreProviderProps) {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [companies, setCompanies] = useState<CompanySummary[]>([]);
+  const [networks, setNetworks] = useState<NetworkSummary[]>([]);
   const [stores, setStores] = useState<StoreSummary[]>([]);
   const [profileRole, setProfileRole] = useState<string | null>(null);
-  const [currentCompanyId, setCurrentCompanyIdState] = useState<string | null>(null);
+  const [currentNetworkId, setCurrentNetworkIdState] = useState<string | null>(null);
   const [currentStoreId, setCurrentStoreIdState] = useState<string | null>(null);
   const [viewMode, setViewModeState] = useState<ViewMode>("store");
   const supabase = useMemo(() => supabaseClient(), []);
 
   const loadData = async () => {
     if (!user) {
-      setCompanies([]);
+      setNetworks([]);
       setStores([]);
       setProfileRole(null);
-      setCurrentCompanyId(null);
+      setCurrentNetworkIdState(null);
       setCurrentStoreIdState(null);
       setLoading(false);
       return;
@@ -87,9 +93,9 @@ export function StoreProvider({ children }: StoreProviderProps) {
 
     setLoading(true);
     try {
-      const { data: profile, error: profileError } = await supabase
+      let { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("full_name, role, default_store_id, org_id")
+        .select("full_name, role, default_store_id, org_id, network_id")
         .eq("id", user.id)
         .maybeSingle<ProfileInfo>();
 
@@ -97,62 +103,146 @@ export function StoreProvider({ children }: StoreProviderProps) {
         throw profileError;
       }
 
-      const role = profile?.role ?? null;
+      let role = profile?.role ?? null;
       setProfileRole(role);
 
-      let companyRows: CompanySummary[] = [];
+      console.log("📋 Perfil do usuário:", {
+        userId: user.id,
+        userEmail: user.email,
+        role,
+        defaultStoreId: profile?.default_store_id,
+        orgId: profile?.org_id,
+        networkId: profile?.network_id,
+      });
+
+      // Se o usuário não tem role, criar perfil com role padrão
+      if (!role) {
+        console.warn("⚠️ Usuário sem role definido. Criando perfil com role 'seller' por padrão.");
+        // Tentar criar/atualizar perfil com role padrão
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .upsert({
+            id: user.id,
+            role: "seller",
+            full_name: profile?.full_name || user.email?.split("@")[0] || "Usuário",
+          }, {
+            onConflict: "id"
+          });
+        
+        if (updateError) {
+          console.error("❌ Erro ao atualizar perfil:", updateError);
+          throw new Error("Usuário sem perfil configurado. Entre em contato com o administrador.");
+        }
+        
+        // Recarregar perfil
+        const { data: updatedProfile } = await supabase
+          .from("profiles")
+          .select("full_name, role, default_store_id, org_id, network_id")
+          .eq("id", user.id)
+          .maybeSingle<ProfileInfo>();
+        
+        if (updatedProfile?.role) {
+          role = updatedProfile.role;
+          setProfileRole(role);
+          // Atualizar profile também para usar os dados atualizados
+          profile = updatedProfile;
+        } else {
+          throw new Error("Não foi possível criar perfil para o usuário.");
+        }
+      }
+
+      let networkRows: NetworkSummary[] = [];
       let storeRows: StoreSummary[] = [];
-      let userCompanyId: string | null = null;
+      let userNetworkId: string | null = null;
 
       if (role === "admin") {
-        // Admin vê todas as empresas e lojas
-        const { data: companiesData, error: companiesError } = await supabase
-          .from("orgs")
+        // Admin vê todas as redes e lojas
+        // Tentar buscar de networks primeiro, fallback para orgs (compatibilidade)
+        const { data: networksData, error: networksError } = await supabase
+          .from("networks")
           .select("id, name")
           .order("name", { ascending: true });
-        if (companiesError) throw companiesError;
-        companyRows = (companiesData ?? []).map((row) => ({
-          id: row.id,
-          name: row.name,
-        }));
+        
+        if (networksError && networksError.code !== "PGRST116") {
+          // Se não for erro de tabela não existir, tentar orgs
+          const { data: orgsData, error: orgsError } = await supabase
+            .from("orgs")
+            .select("id, name")
+            .order("name", { ascending: true });
+          if (orgsError) throw orgsError;
+          networkRows = (orgsData ?? []).map((row) => ({
+            id: row.id,
+            name: row.name,
+          }));
+        } else if (networksData) {
+          networkRows = (networksData ?? []).map((row) => ({
+            id: row.id,
+            name: row.name,
+          }));
+        }
 
         const { data: storesData, error: storesError } = await supabase
           .from("stores")
           .select(
-            "id, name, org_id, logo_url, is_active, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
+            "id, name, network_id, org_id, logo_url, is_active, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
           )
           .order("name", { ascending: true });
         if (storesError) throw storesError;
 
-        // Buscar nomes das empresas para as lojas
-        const orgIds = [...new Set((storesData ?? []).map((s) => s.org_id).filter(Boolean))];
-        const { data: orgsData } = await supabase
-          .from("orgs")
-          .select("id, name")
-          .in("id", orgIds);
-        const orgMap = new Map((orgsData ?? []).map((o) => [o.id, o.name]));
+        const networkIds = [...new Set((storesData ?? []).map((s) => s.network_id || s.org_id).filter(Boolean))];
+        
+        let networkMap = new Map<string, string>();
+        let networkLogoMap = new Map<string, string | null>();
+        
+        if (networkIds.length > 0) {
+          const { data: networksData } = await supabase
+            .from("networks")
+            .select("id, name, logo_url")
+            .in("id", networkIds);
+          if (networksData) {
+            networkMap = new Map((networksData ?? []).map((n) => [n.id, n.name]));
+            networkLogoMap = new Map((networksData ?? []).map((n) => [n.id, n.logo_url ?? null]));
+          }
+          
+          if (networkMap.size === 0) {
+            const { data: orgsData } = await supabase
+              .from("orgs")
+              .select("id, name, logo_url")
+              .in("id", networkIds);
+            if (orgsData) {
+              networkMap = new Map((orgsData ?? []).map((o) => [o.id, o.name]));
+              networkLogoMap = new Map((orgsData ?? []).map((o) => [o.id, o.logo_url ?? null]));
+            }
+          }
+        }
 
         storeRows = (storesData ?? [])
           .filter((row) => row.is_active ?? true)
-          .map((row) => ({
-            id: row.id,
-            name: row.name,
-            companyId: row.org_id,
-            companyName: orgMap.get(row.org_id) ?? null,
-            logoUrl: row.logo_url,
-            storeRole: "admin",
-            isActive: row.is_active ?? true,
-            branding: {
-              primaryColor: row.brand_primary_color,
-              secondaryColor: row.brand_secondary_color,
-              tagline: row.brand_tagline,
-              coverImageUrl: row.brand_cover_url,
-              supportEmail: row.brand_support_email,
-              supportPhone: row.brand_support_phone,
-            },
-          }));
+          .map((row) => {
+            const networkId = row.network_id || row.org_id;
+            const networkLogo = networkLogoMap.get(networkId || "") ?? null;
+            return {
+              id: row.id,
+              name: row.name,
+              networkId: row.network_id || null,
+              networkName: networkMap.get(networkId || "") ?? null,
+              companyId: row.org_id || row.network_id || null,
+              companyName: networkMap.get(networkId || "") ?? null,
+              logoUrl: row.logo_url || networkLogo,
+              storeRole: "admin",
+              isActive: row.is_active ?? true,
+              branding: {
+                primaryColor: row.brand_primary_color,
+                secondaryColor: row.brand_secondary_color,
+                tagline: row.brand_tagline,
+                coverImageUrl: row.brand_cover_url,
+                supportEmail: row.brand_support_email,
+                supportPhone: row.brand_support_phone,
+              },
+            };
+          });
       } else {
-        // Usuários não-admin veem apenas suas empresas/lojas
+        // Usuários não-admin veem apenas suas redes/lojas
         const { data: memberData, error: memberError } = await supabase
           .from("store_members")
           .select("store_id, role, active")
@@ -166,43 +256,73 @@ export function StoreProvider({ children }: StoreProviderProps) {
           const { data: storesData, error: storesError } = await supabase
             .from("stores")
             .select(
-              "id, name, org_id, logo_url, is_active, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
+              "id, name, network_id, org_id, logo_url, is_active, brand_primary_color, brand_secondary_color, brand_tagline, brand_cover_url, brand_support_email, brand_support_phone"
             )
             .in("id", storeIds);
           if (storesError) throw storesError;
 
-          // Buscar empresas das lojas do usuário
-          const orgIds = [...new Set((storesData ?? []).map((s) => s.org_id).filter(Boolean))];
-          const { data: orgsData } = await supabase
-            .from("orgs")
-            .select("id, name")
-            .in("id", orgIds);
-          companyRows = (orgsData ?? []).map((row) => ({
-            id: row.id,
-            name: row.name,
-          }));
+          const networkIds = [...new Set((storesData ?? []).map((s) => s.network_id || s.org_id).filter(Boolean))];
+          
+          let networkMap = new Map<string, string>();
+          let networkLogoMap = new Map<string, string | null>();
+          
+          if (networkIds.length > 0) {
+            const { data: networksData } = await supabase
+              .from("networks")
+              .select("id, name, logo_url")
+              .in("id", networkIds);
+            if (networksData) {
+              networkMap = new Map((networksData ?? []).map((n) => [n.id, n.name]));
+              networkLogoMap = new Map((networksData ?? []).map((n) => [n.id, n.logo_url ?? null]));
+            }
+            
+            if (networkMap.size === 0) {
+              const { data: orgsData } = await supabase
+                .from("orgs")
+                .select("id, name, logo_url")
+                .in("id", networkIds);
+              if (orgsData) {
+                networkMap = new Map((orgsData ?? []).map((o) => [o.id, o.name]));
+                networkLogoMap = new Map((orgsData ?? []).map((o) => [o.id, o.logo_url ?? null]));
+                networkRows = (orgsData ?? []).map((row) => ({
+                  id: row.id,
+                  name: row.name,
+                }));
+              }
+            } else {
+              networkRows = (networksData ?? []).map((row) => ({
+                id: row.id,
+                name: row.name,
+              }));
+            }
+          }
 
-          // Se o usuário tem org_id no perfil, usar como empresa padrão
-          userCompanyId = profile?.org_id ?? orgIds[0] ?? null;
-
-          const orgMap = new Map((orgsData ?? []).map((o) => [o.id, o.name]));
+          // Se o usuário tem network_id no perfil, usar como rede padrão
+          userNetworkId = profile?.network_id || profile?.org_id || networkIds[0] ?? null;
 
           const storeMap = new Map<
             string,
             {
               name: string;
+              networkId: string | null;
+              networkName: string | null;
               companyId: string | null;
               companyName: string | null;
               logoUrl: string | null;
+              isActive: boolean;
               branding: StoreBranding | undefined;
             }
           >();
           (storesData ?? []).forEach((row) => {
+            const networkId = row.network_id || row.org_id;
+            const networkLogo = networkLogoMap.get(networkId || "") ?? null;
             storeMap.set(row.id, {
               name: row.name,
-              companyId: row.org_id,
-              companyName: orgMap.get(row.org_id) ?? null,
-              logoUrl: row.logo_url,
+              networkId: row.network_id || null,
+              networkName: networkMap.get(networkId || "") ?? null,
+              companyId: row.org_id || row.network_id || null,
+              companyName: networkMap.get(networkId || "") ?? null,
+              logoUrl: row.logo_url || networkLogo,
               isActive: row.is_active ?? true,
               branding: {
                 primaryColor: row.brand_primary_color,
@@ -218,40 +338,51 @@ export function StoreProvider({ children }: StoreProviderProps) {
           storeRows = memberRows
             .map((row) => {
               const meta = storeMap.get(row.store_id);
-              if (!meta?.isActive) return null;
-              return {
+              if (!meta || !meta.isActive) return null;
+              const storeSummary: StoreSummary = {
                 id: row.store_id,
-                name: meta?.name ?? "Loja",
-                companyId: meta?.companyId ?? null,
-                companyName: meta?.companyName ?? null,
-                logoUrl: meta?.logoUrl ?? null,
+                name: meta.name ?? "Loja",
+                networkId: meta.networkId ?? null,
+                networkName: meta.networkName ?? null,
+                companyId: meta.companyId ?? null, // Compatibilidade
+                companyName: meta.companyName ?? null, // Compatibilidade
+                logoUrl: meta.logoUrl ?? null,
                 storeRole: row.role,
-                isActive: meta?.isActive ?? true,
-                branding: meta?.branding,
+                isActive: meta.isActive,
+                branding: meta.branding,
               };
+              return storeSummary;
             })
             .filter((row): row is StoreSummary => row !== null);
           storeRows.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
         }
       }
 
-      setCompanies(companyRows);
+      console.log("📊 Dados carregados:", {
+        networksCount: networkRows.length,
+        storesCount: storeRows.length,
+        networkNames: networkRows.map(n => n.name),
+        storeNames: storeRows.map(s => s.name),
+      });
+
+      setNetworks(networkRows);
       setStores(storeRows);
 
-      // Definir empresa atual
-      const preferredCompanyId = userCompanyId ?? companyRows[0]?.id ?? null;
-      setCurrentCompanyIdState(preferredCompanyId);
+      // Definir rede atual
+      const preferredNetworkId = userNetworkId ?? networkRows[0]?.id ?? null;
+      console.log("🔗 Rede selecionada:", preferredNetworkId);
+      setCurrentNetworkIdState(preferredNetworkId);
 
-      // Filtrar lojas pela empresa selecionada
-      const storesForCompany = preferredCompanyId
-        ? storeRows.filter((s) => s.companyId === preferredCompanyId)
+      // Filtrar lojas pela rede selecionada
+      const storesForNetwork = preferredNetworkId
+        ? storeRows.filter((s) => (s.networkId || s.companyId) === preferredNetworkId)
         : storeRows;
 
       // Definir loja atual
       const preferredStoreId = profile?.default_store_id;
-      const fallbackStoreId = storesForCompany[0]?.id ?? null;
+      const fallbackStoreId = storesForNetwork[0]?.id ?? null;
       const resolvedStoreId =
-        preferredStoreId && storesForCompany.some((store) => store.id === preferredStoreId)
+        preferredStoreId && storesForNetwork.some((store) => store.id === preferredStoreId)
           ? preferredStoreId
           : fallbackStoreId;
 
@@ -262,10 +393,11 @@ export function StoreProvider({ children }: StoreProviderProps) {
       const isManager = role === "manager" || role === "owner";
       setViewModeState(isManager ? "store" : "store");
     } catch (error) {
-      console.error("Erro ao carregar contexto de lojas:", error);
-      setCompanies([]);
+      console.error("❌ Erro ao carregar contexto de lojas:", error);
+      console.error("❌ Detalhes do erro:", JSON.stringify(error, null, 2));
+      setNetworks([]);
       setStores([]);
-      setCurrentCompanyId(null);
+      setCurrentNetworkIdState(null);
       setCurrentStoreIdState(null);
     } finally {
       setLoading(false);
@@ -278,29 +410,39 @@ export function StoreProvider({ children }: StoreProviderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
 
-  const handleChangeCompany = async (id: string | null) => {
-    if (currentCompanyId === id) return;
-    setCurrentCompanyIdState(id);
+  const handleChangeNetwork = async (id: string | null) => {
+    if (currentNetworkId === id) return;
+    setCurrentNetworkIdState(id);
 
-    // Filtrar lojas pela nova empresa
-    const storesForCompany = id
-      ? stores.filter((s) => s.companyId === id)
+    // Filtrar lojas pela nova rede
+    const storesForNetwork = id
+      ? stores.filter((s) => (s.networkId || s.companyId) === id)
       : stores;
 
-    // Se a loja atual não pertence à nova empresa, mudar para a primeira loja disponível
-    const currentStoreBelongsToCompany = id
-      ? storesForCompany.some((s) => s.id === currentStoreId)
+    if (currentStoreId === "all") {
+      return;
+    }
+
+    const currentStoreBelongsToNetwork = id
+      ? storesForNetwork.some((s) => s.id === currentStoreId)
       : true;
 
-    if (!currentStoreBelongsToCompany && storesForCompany.length > 0) {
-      await handleChangeStore(storesForCompany[0].id);
+    if (!currentStoreBelongsToNetwork && storesForNetwork.length > 0) {
+      await handleChangeStore(storesForNetwork[0].id);
     }
   };
+
+  // Compatibilidade: alias para handleChangeNetwork
+  const handleChangeCompany = handleChangeNetwork;
 
   const handleChangeStore = async (id: string) => {
     if (currentStoreId === id) return;
     setCurrentStoreIdState(id);
     if (!user) return;
+
+    if (id === "all") {
+      return;
+    }
 
     try {
       await supabase
@@ -309,7 +451,6 @@ export function StoreProvider({ children }: StoreProviderProps) {
         .eq("id", user.id);
     } catch (error) {
       console.error("Erro ao atualizar loja padrão:", error);
-      // Recarrega dados para evitar estado inconsistente
       await loadData();
     }
   };
@@ -320,19 +461,21 @@ export function StoreProvider({ children }: StoreProviderProps) {
 
   // Helper para obter store IDs baseado no modo de visualização
   const getStoreIdsForQuery = (): string[] | null => {
+    if (currentStoreId === "all") {
+      if (!currentNetworkId) return null;
+      return stores.filter((s) => (s.networkId || s.companyId) === currentNetworkId).map((s) => s.id);
+    }
     if (viewMode === "network") {
-      // Modo rede: todas as lojas da empresa atual
-      if (!currentCompanyId) return null;
-      return stores.filter((s) => s.companyId === currentCompanyId).map((s) => s.id);
+      if (!currentNetworkId) return null;
+      return stores.filter((s) => (s.networkId || s.companyId) === currentNetworkId).map((s) => s.id);
     } else {
-      // Modo loja: apenas a loja selecionada
       return currentStoreId ? [currentStoreId] : null;
     }
   };
 
-  // Lojas filtradas pela empresa atual
-  const storesForCurrentCompany = currentCompanyId
-    ? stores.filter((s) => s.companyId === currentCompanyId)
+  // Lojas filtradas pela rede atual
+  const storesForCurrentNetwork = currentNetworkId
+    ? stores.filter((s) => (s.networkId || s.companyId) === currentNetworkId)
     : stores;
 
   const isManager = profileRole === "manager" || profileRole === "owner";
@@ -340,19 +483,22 @@ export function StoreProvider({ children }: StoreProviderProps) {
 
   const value: StoreContextValue = {
     loading,
-    companies,
-    stores: storesForCurrentCompany,
-    currentCompanyId,
+    networks,
+    companies: networks, // Compatibilidade: alias para networks
+    stores: storesForCurrentNetwork,
+    currentNetworkId,
+    currentCompanyId: currentNetworkId, // Compatibilidade: alias para currentNetworkId
     currentStoreId,
-    currentStore: currentStoreId
-      ? storesForCurrentCompany.find((store) => store.id === currentStoreId) ?? null
+    currentStore: currentStoreId && currentStoreId !== "all"
+      ? storesForCurrentNetwork.find((store) => store.id === currentStoreId) ?? null
       : null,
     viewMode,
     profileRole,
     isAdmin: profileRole === "admin",
     isManager,
     canViewNetwork,
-    setCurrentCompanyId: handleChangeCompany,
+    setCurrentNetworkId: handleChangeNetwork,
+    setCurrentCompanyId: handleChangeCompany, // Compatibilidade
     setCurrentStoreId: handleChangeStore,
     setViewMode: handleViewModeChange,
     refresh: loadData,
