@@ -296,7 +296,7 @@ export default function ZApiView() {
               )}
 
               <div>
-                <Label htmlFor="instance-id">Instância Z-API *</Label>
+                <Label htmlFor="zapi-instance-input">Instância Z-API *</Label>
                 {storedInstanceId && (
                   <p className="text-xs text-gray-500 mt-1">
                     Valor atual:&nbsp;
@@ -306,16 +306,18 @@ export default function ZApiView() {
                   </p>
                 )}
                 <Input 
-                  id="instance-id"
-                  name="zapi-instance-id"
+                  id="zapi-instance-input"
+                  name="zapi-instance-input"
                   type="password"
-                  autoComplete="new-password"
-                  value={instanceId}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  value={instanceId || ''}
                   onChange={(e) => {
                     setInstanceId(e.target.value);
                     handleFieldChange();
                   }}
-                  placeholder={storedInstanceId ? "Digite para substituir o valor atual" : "3E5617B992C1A1A44BE92AC1CE4E084C"}
+                  placeholder={storedInstanceId ? "Digite para substituir o valor atual" : "Digite a instância Z-API"}
                   className="bg-white font-mono text-sm mt-1"
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -324,7 +326,7 @@ export default function ZApiView() {
               </div>
 
               <div>
-                <Label htmlFor="token">Token Z-API *</Label>
+                <Label htmlFor="zapi-token-input">Token Z-API *</Label>
                 {storedToken && (
                   <p className="text-xs text-gray-500 mt-1">
                     Valor atual:&nbsp;
@@ -334,16 +336,18 @@ export default function ZApiView() {
                   </p>
                 )}
                 <Input 
-                  id="token"
-                  name="zapi-token"
+                  id="zapi-token-input"
+                  name="zapi-token-input"
                   type="password"
-                  autoComplete="new-password"
-                  value={token}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  value={token || ''}
                   onChange={(e) => {
                     setToken(e.target.value);
                     handleFieldChange();
                   }}
-                  placeholder={storedToken ? "Digite para substituir o valor atual" : "965006A3DBD3AE6A5ACF05EF"}
+                  placeholder={storedToken ? "Digite para substituir o valor atual" : "Digite o token Z-API"}
                   className="bg-white font-mono text-sm mt-1"
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -352,18 +356,20 @@ export default function ZApiView() {
               </div>
 
               <div>
-                <Label htmlFor="client-token">Client-Token Z-API *</Label>
+                <Label htmlFor="zapi-client-token-input">Client-Token Z-API *</Label>
                 {storedClientTokenEncrypted && (
                   <p className="text-xs text-gray-500 mt-1">
                     Já existe um client-token salvo. Para trocar, digite um novo valor abaixo.
                   </p>
                 )}
                 <Input 
-                  id="client-token"
-                  name="zapi-client-token"
+                  id="zapi-client-token-input"
+                  name="zapi-client-token-input"
                   type="password"
-                  autoComplete="new-password"
-                  value={clientToken}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  value={clientToken || ''}
                   onChange={(e) => {
                     setClientToken(e.target.value);
                     handleFieldChange();
