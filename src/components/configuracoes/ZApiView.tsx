@@ -17,11 +17,16 @@ export default function ZApiView() {
   const router = useRouter();
   const { testConnection, isLoading: zapiLoading } = useZApi();
   
-  // Estados dos campos
+  // Estados dos campos (novos valores que o usuário pode digitar)
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [clientToken, setClientToken] = useState('');
   const [managerPhone, setManagerPhone] = useState('5551982813505');
+
+  // Valores já salvos (não exibidos em texto puro)
+  const [storedInstanceId, setStoredInstanceId] = useState<string | null>(null);
+  const [storedToken, setStoredToken] = useState<string | null>(null);
+  const [storedClientTokenEncrypted, setStoredClientTokenEncrypted] = useState<string | null>(null);
   
   // Estados de controle
   const [loading, setLoading] = useState(true);
@@ -44,9 +49,12 @@ export default function ZApiView() {
       
       if (!supabaseUrl || !supabaseKey) {
         console.warn('Variáveis de ambiente do Supabase não configuradas. Não é possível carregar configurações salvas.');
-        // Valores padrão se não houver configuração salva
-        setInstanceId(process.env.NEXT_PUBLIC_ZAPI_INSTANCE || '');
-        setToken(process.env.NEXT_PUBLIC_ZAPI_TOKEN || '');
+        // Valores padrão se não houver configuração salva (apenas como origem, não exibidos)
+        setStoredInstanceId(process.env.NEXT_PUBLIC_ZAPI_INSTANCE || null);
+        setStoredToken(process.env.NEXT_PUBLIC_ZAPI_TOKEN || null);
+        setStoredClientTokenEncrypted(null);
+        setInstanceId('');
+        setToken('');
         setClientToken('');
         return;
       }
@@ -57,41 +65,41 @@ export default function ZApiView() {
         // Garante que instance_id e token não sejam emails ou valores inválidos
         const instanceIdValue = config.instance_id || '';
         const tokenValue = config.token || '';
-        
+
         // Valida que não são emails (verifica se contém @)
         const validInstanceId = instanceIdValue && !instanceIdValue.includes('@') ? instanceIdValue : '';
         const validToken = tokenValue && !tokenValue.includes('@') ? tokenValue : '';
-        
-        setInstanceId(validInstanceId);
-        setToken(validToken);
-        
-        // Client-token descriptografado - sempre oculto
-        if (config.client_token_encrypted) {
-          const decrypted = await getDecryptedClientToken(config.client_token_encrypted);
-          // Preenche com o valor descriptografado (mas sempre será mostrado como senha)
-          // Valida que não é email
-          const validClientToken = decrypted && !decrypted.includes('@') ? decrypted : '';
-          setClientToken(validClientToken);
-        } else {
-          // Se não houver client-token salvo, verifica variável de ambiente como fallback
-          // Mas ainda assim o usuário precisa preencher (campo obrigatório)
-          setClientToken('');
-        }
+
+        // Guardamos apenas como "salvos", não exibimos o valor completo em campos editáveis
+        setStoredInstanceId(validInstanceId || null);
+        setStoredToken(validToken || null);
+        setStoredClientTokenEncrypted(config.client_token_encrypted || null);
+
+        // Campos de edição começam vazios para evitar exposição visual
+        setInstanceId('');
+        setToken('');
+        setClientToken('');
         setManagerPhone(config.manager_phone || '5551982813505');
         
         // Salva no localStorage para compatibilidade
         localStorage.setItem('managerPhone', config.manager_phone || '5551982813505');
       } else {
-        // Valores padrão se não houver configuração salva
-        setInstanceId(process.env.NEXT_PUBLIC_ZAPI_INSTANCE || '');
-        setToken(process.env.NEXT_PUBLIC_ZAPI_TOKEN || '');
+        // Valores padrão se não houver configuração salva (apenas origem, não exibidos)
+        setStoredInstanceId(process.env.NEXT_PUBLIC_ZAPI_INSTANCE || null);
+        setStoredToken(process.env.NEXT_PUBLIC_ZAPI_TOKEN || null);
+        setStoredClientTokenEncrypted(null);
+        setInstanceId('');
+        setToken('');
         setClientToken('');
       }
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
       // Em caso de erro, tenta valores padrão
-      setInstanceId(process.env.NEXT_PUBLIC_ZAPI_INSTANCE || '');
-      setToken(process.env.NEXT_PUBLIC_ZAPI_TOKEN || '');
+      setStoredInstanceId(process.env.NEXT_PUBLIC_ZAPI_INSTANCE || null);
+      setStoredToken(process.env.NEXT_PUBLIC_ZAPI_TOKEN || null);
+      setStoredClientTokenEncrypted(null);
+      setInstanceId('');
+      setToken('');
       setClientToken('');
     } finally {
       setLoading(false);
@@ -102,11 +110,16 @@ export default function ZApiView() {
     setErrors([]);
     setSuccess(false);
 
-    // Validação
+    // Calcula valores efetivos (mantém os já salvos se campos estiverem vazios)
+    const effectiveInstanceId = instanceId.trim() || storedInstanceId || "";
+    const effectiveToken = token.trim() || storedToken || "";
+    const hasEffectiveClientToken = !!clientToken.trim() || !!storedClientTokenEncrypted;
+
+    // Validação (sem expor o client-token real)
     const validation = validateZApiConfig({
-      instance_id: instanceId,
-      token: token,
-      client_token_encrypted: clientToken,
+      instance_id: effectiveInstanceId,
+      token: effectiveToken,
+      client_token_encrypted: hasEffectiveClientToken ? "**********" : "",
       manager_phone: managerPhone,
     });
 
@@ -126,22 +139,37 @@ export default function ZApiView() {
 
     setSaving(true);
     try {
-      // Valida que o client-token foi preenchido
-      if (!clientToken || clientToken.trim().length === 0) {
+      // Valida que o client-token existe (novo ou já salvo)
+      if (!clientToken.trim() && !storedClientTokenEncrypted) {
         setErrors(['Client-Token Z-API é obrigatório']);
         setSaving(false);
         return;
       }
 
-      // Criptografa o client-token antes de salvar
-      const encryptedClientToken = await encrypt(clientToken.trim());
+      // Criptografa o client-token antes de salvar (se foi alterado)
+      let encryptedClientToken: string | null = null;
+      if (clientToken.trim()) {
+        encryptedClientToken = await encrypt(clientToken.trim());
+      } else if (storedClientTokenEncrypted) {
+        // Mantém o valor já existente no banco
+        encryptedClientToken = storedClientTokenEncrypted;
+      }
 
       await saveZApiConfig({
-        instance_id: instanceId.trim(),
-        token: token.trim(),
-        client_token_encrypted: encryptedClientToken,
+        instance_id: effectiveInstanceId.trim(),
+        token: effectiveToken.trim(),
+        client_token_encrypted: encryptedClientToken || undefined,
         manager_phone: managerPhone.trim(),
       });
+
+      // Atualiza estados "salvos" após persistir
+      setStoredInstanceId(effectiveInstanceId.trim());
+      setStoredToken(effectiveToken.trim());
+      setStoredClientTokenEncrypted(encryptedClientToken);
+      // Limpa campos de edição para não manter valores sensíveis na tela
+      setInstanceId('');
+      setToken('');
+      setClientToken('');
 
       // Salva no localStorage para compatibilidade
       localStorage.setItem('managerPhone', managerPhone.trim());
@@ -269,6 +297,14 @@ export default function ZApiView() {
 
               <div>
                 <Label htmlFor="instance-id">Instância Z-API *</Label>
+                {storedInstanceId && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Valor atual:&nbsp;
+                    <span className="font-mono">
+                      {"••••••••" + storedInstanceId.slice(-4)}
+                    </span>
+                  </p>
+                )}
                 <Input 
                   id="instance-id"
                   name="zapi-instance-id"
@@ -279,16 +315,24 @@ export default function ZApiView() {
                     setInstanceId(e.target.value);
                     handleFieldChange();
                   }}
-                  placeholder="3E5617B992C1A1A44BE92AC1CE4E084C"
-                  className="bg-white font-mono text-sm"
+                  placeholder={storedInstanceId ? "Digite para substituir o valor atual" : "3E5617B992C1A1A44BE92AC1CE4E084C"}
+                  className="bg-white font-mono text-sm mt-1"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  ID da instância da sua conta Z-API (será criptografado ao salvar)
+                  ID da instância da sua conta Z-API. Se deixar em branco, o valor atual será mantido.
                 </p>
               </div>
 
               <div>
                 <Label htmlFor="token">Token Z-API *</Label>
+                {storedToken && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Valor atual:&nbsp;
+                    <span className="font-mono">
+                      {"••••••••" + storedToken.slice(-4)}
+                    </span>
+                  </p>
+                )}
                 <Input 
                   id="token"
                   name="zapi-token"
@@ -299,16 +343,21 @@ export default function ZApiView() {
                     setToken(e.target.value);
                     handleFieldChange();
                   }}
-                  placeholder="965006A3DBD3AE6A5ACF05EF"
-                  className="bg-white font-mono text-sm"
+                  placeholder={storedToken ? "Digite para substituir o valor atual" : "965006A3DBD3AE6A5ACF05EF"}
+                  className="bg-white font-mono text-sm mt-1"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Token de autenticação da instância (será criptografado ao salvar)
+                  Token de autenticação da instância. Se deixar em branco, o valor atual será mantido.
                 </p>
               </div>
 
               <div>
                 <Label htmlFor="client-token">Client-Token Z-API *</Label>
+                {storedClientTokenEncrypted && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Já existe um client-token salvo. Para trocar, digite um novo valor abaixo.
+                  </p>
+                )}
                 <Input 
                   id="client-token"
                   name="zapi-client-token"
@@ -319,9 +368,9 @@ export default function ZApiView() {
                     setClientToken(e.target.value);
                     handleFieldChange();
                   }}
-                  placeholder="Digite o client-token (sempre oculto)"
-                  className="bg-white font-mono text-sm"
-                  required
+                  placeholder={storedClientTokenEncrypted ? "Deixe em branco para manter o atual" : "Digite o client-token (sempre oculto)"}
+                  className="bg-white font-mono text-sm mt-1"
+                  required={!storedClientTokenEncrypted}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Token sensível obrigatório (sempre oculto por segurança). Será criptografado com AES-256-GCM antes de salvar no banco de dados.
@@ -361,7 +410,16 @@ export default function ZApiView() {
               <div className="flex gap-2 pt-2">
                 <Button
                   onClick={handleSave}
-                  disabled={saving || !hasChanges || !instanceId.trim() || !token.trim() || !clientToken.trim()}
+                  disabled={
+                    saving ||
+                    !hasChanges ||
+                    // precisa ter instância (nova ou já salva)
+                    (!instanceId.trim() && !storedInstanceId) ||
+                    // precisa ter token (novo ou já salvo)
+                    (!token.trim() && !storedToken) ||
+                    // precisa ter client-token (novo ou já salvo)
+                    (!clientToken.trim() && !storedClientTokenEncrypted)
+                  }
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700"
                 >
                   {saving ? (
