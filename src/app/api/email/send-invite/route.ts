@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
+import { authRateLimit } from '@/lib/rateLimit';
+import { safeLogger } from '@/lib/safeLogger';
+import { requireAdmin } from '@/lib/adminAuth';
 
 /**
  * API Route para envio de email de convite via SMTP do Gmail
  * O email é enviado via nodemailer usando as credenciais SMTP configuradas
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await authRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const { to, subject, html, token } = await request.json();
 
@@ -17,8 +25,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const adminResult = await requireAdmin(request);
+    if ('errorResponse' in adminResult) return adminResult.errorResponse;
+    const { supabaseAdmin } = adminResult;
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
     // Configurações SMTP do Gmail
@@ -28,34 +38,18 @@ export async function POST(request: NextRequest) {
     const smtpPassword = process.env.SMTP_PASSWORD;
     const smtpFrom = process.env.SMTP_FROM || smtpUser;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ SUPABASE_SERVICE_ROLE_KEY não configurado');
-      return NextResponse.json(
-        { error: 'Configuração do Supabase não encontrada. Configure SUPABASE_SERVICE_ROLE_KEY.' },
-        { status: 500 }
-      );
-    }
-
     if (!smtpUser || !smtpPassword) {
-      console.error('❌ Credenciais SMTP não configuradas');
+      safeLogger.error('❌ Credenciais SMTP não configuradas');
       return NextResponse.json(
         { error: 'Credenciais SMTP não configuradas. Configure SMTP_USER e SMTP_PASSWORD.' },
         { status: 500 }
       );
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
     const activationUrl = `${appUrl}/ativar-conta?token=${token}`;
 
-    console.log('📧 Iniciando envio de convite para:', to);
-    console.log('🔗 URL de ativação:', activationUrl);
-    console.log('🔑 Token:', token.substring(0, 10) + '...');
+    safeLogger.log('📧 Iniciando envio de convite para:', to);
+    safeLogger.log('🔗 URL de ativação:', activationUrl);
 
     // Configurar transporter SMTP
     const transporter = nodemailer.createTransport({
@@ -71,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Enviar email via SMTP
     let emailSent = false;
     try {
-      console.log('📧 Enviando email via SMTP do Gmail...');
+      safeLogger.log('📧 Enviando email via SMTP do Gmail...');
       const mailOptions = {
         from: smtpFrom,
         to: to,
@@ -80,10 +74,10 @@ export async function POST(request: NextRequest) {
       };
 
       const info = await transporter.sendMail(mailOptions);
-      console.log('✅ Email enviado via SMTP. Message ID:', info.messageId);
+      safeLogger.log('✅ Email enviado via SMTP. Message ID:', info.messageId);
       emailSent = true;
     } catch (emailError) {
-      console.error('❌ Erro ao enviar email via SMTP:', emailError);
+      safeLogger.error('❌ Erro ao enviar email via SMTP:', emailError);
       return NextResponse.json(
         { 
           error: 'Erro ao enviar email', 
@@ -95,14 +89,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o usuário já existe usando listUsers
-    console.log('🔍 Verificando se usuário já existe...');
+    safeLogger.log('🔍 Verificando se usuário já existe...');
     const { data: usersList, error: listError } = await supabaseAdmin.auth.admin.listUsers({
       page: 1,
       perPage: 1000, // Aumentar limite para garantir que encontramos o usuário
     });
     
     if (listError) {
-      console.error('❌ Erro ao listar usuários:', listError);
+      safeLogger.error('❌ Erro ao listar usuários:', listError);
       // Continuar mesmo com erro, pois pode ser problema de paginação
     }
 
@@ -112,14 +106,14 @@ export async function POST(request: NextRequest) {
     );
     
     if (existingUser) {
-      console.log('✅ Usuário encontrado na verificação inicial:', existingUser.id);
+      safeLogger.log('✅ Usuário encontrado na verificação inicial:', existingUser.id);
     } else {
-      console.log('ℹ️ Usuário não encontrado, será criado');
+      safeLogger.log('ℹ️ Usuário não encontrado, será criado');
     }
 
     if (existingUser) {
-      console.log('ℹ️ Usuário já existe:', existingUser.id);
-      console.log('📧 Email confirmado:', existingUser.email_confirmed_at ? 'Sim' : 'Não');
+      safeLogger.log('ℹ️ Usuário já existe:', existingUser.id);
+      safeLogger.log('📧 Email confirmado:', existingUser.email_confirmed_at ? 'Sim' : 'Não');
       
       return NextResponse.json({ 
         success: true, 
@@ -131,7 +125,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log('🆕 Criando novo usuário...');
+    safeLogger.log('🆕 Criando novo usuário...');
     
     // Extrair cargo do HTML (o template TypeScript inclui o cargo)
     const roleMatch = html.match(/Seu cargo será: <strong>([^<]+)<\/strong>/i) || 
@@ -139,7 +133,7 @@ export async function POST(request: NextRequest) {
                        html.match(/<strong[^>]*>([^<]+)<\/strong>/i);
     const roleLabel = roleMatch ? roleMatch[1].trim() : 'Colaborador';
     
-    console.log('📋 Cargo extraído:', roleLabel);
+    safeLogger.log('📋 Cargo extraído:', roleLabel);
     
     // Criar novo usuário e enviar email de confirmação
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -152,19 +146,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (createError) {
-      console.error('❌ Erro ao criar usuário:', createError);
+      safeLogger.error('❌ Erro ao criar usuário:', createError);
       
       // Se o erro for porque o usuário já existe, verificar novamente e tratar
       if (createError.message?.includes('already been registered') || 
           createError.message?.includes('already exists')) {
-        console.log('ℹ️ Usuário já existe (detectado no erro), buscando novamente...');
+        safeLogger.log('ℹ️ Usuário já existe (detectado no erro), buscando novamente...');
         
         // Buscar o usuário existente
         const { data: usersList2, error: listError2 } = await supabaseAdmin.auth.admin.listUsers();
         const existingUser2 = usersList2?.users?.find((user: any) => user.email === to);
         
         if (existingUser2) {
-          console.log('✅ Usuário encontrado:', existingUser2.id);
+          safeLogger.log('✅ Usuário encontrado:', existingUser2.id);
           // Retornar sucesso, pois o convite já foi criado no banco antes desta chamada
           return NextResponse.json(
             { 
@@ -180,15 +174,15 @@ export async function POST(request: NextRequest) {
       }
       
       return NextResponse.json(
-        { error: 'Erro ao criar usuário', details: createError.message },
+        { error: 'Erro ao criar usuário' },
         { status: 500 }
       );
     }
 
-    console.log('✅ Usuário criado:', newUser.user?.id);
-    console.log('📋 ID do usuário:', newUser.user?.id);
-    console.log('📋 Email confirmado:', newUser.user?.email_confirmed_at ? 'Sim' : 'Não');
-    console.log('📧 Email enviado:', emailSent ? 'Sim (via SMTP)' : 'Não');
+    safeLogger.log('✅ Usuário criado:', newUser.user?.id);
+    safeLogger.log('📋 ID do usuário:', newUser.user?.id);
+    safeLogger.log('📋 Email confirmado:', newUser.user?.email_confirmed_at ? 'Sim' : 'Não');
+    safeLogger.log('📧 Email enviado:', emailSent ? 'Sim (via SMTP)' : 'Não');
     
     return NextResponse.json({ 
       success: true, 
@@ -199,9 +193,9 @@ export async function POST(request: NextRequest) {
       emailSent: emailSent,
     });
   } catch (error) {
-    console.error('Erro ao enviar email de convite:', error);
+    safeLogger.error('Erro ao enviar email de convite:', error);
     return NextResponse.json(
-      { error: 'Erro ao enviar email', details: error instanceof Error ? error.message : 'Erro desconhecido' },
+      { error: 'Erro ao enviar email' },
       { status: 500 }
     );
   }

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseClient } from '@/lib/supabaseClient';
+import { apiRateLimit } from '@/lib/rateLimit';
+import { safeLogger } from '@/lib/safeLogger';
+import { validateRequest, zapiSendSchema } from '@/lib/validation';
 
 interface ZApiConfig {
   instance_id: string;
@@ -37,8 +40,25 @@ async function loadZApiConfigServer(): Promise<ZApiConfig | null> {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await apiRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
-    const { phone, message, instanceId, token, clientToken } = await request.json();
+    const body = await request.json();
+    
+    // Validação com Zod
+    const validation = await validateRequest(zapiSendSchema, body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: validation.status }
+      );
+    }
+
+    const { phone, message, instanceId, token, clientToken } = validation.data;
     
     // Tenta usar os parâmetros fornecidos, senão busca do banco
     let finalInstanceId = instanceId;
@@ -61,35 +81,29 @@ export async function POST(request: NextRequest) {
           if (!finalClientToken && config.client_token_encrypted) {
             // Não podemos descriptografar no servidor (usa sessionStorage)
             // Então usamos variável de ambiente ou erro
-            console.warn('Client-token criptografado encontrado, mas não podemos descriptografar no servidor. Use variável de ambiente ou forneça no parâmetro.');
+            safeLogger.warn('Client-token criptografado encontrado, mas não podemos descriptografar no servidor. Use variável de ambiente ou forneça no parâmetro.');
           }
         }
       } catch (dbError) {
-        console.warn('Não foi possível buscar configuração do banco:', dbError);
+        safeLogger.warn('Não foi possível buscar configuração do banco:', dbError);
       }
     }
     
-    // Fallback para variáveis de ambiente
+    // Fallback seguro para variáveis de ambiente (sem valores hardcoded)
     if (!finalInstanceId) {
-      finalInstanceId = process.env.NEXT_PUBLIC_ZAPI_INSTANCE || '3E5617B992C1A1A44BE92AC1CE4E084C';
+      // Preferir variáveis somente de servidor, manter compatibilidade com possíveis configs antigas
+      finalInstanceId = process.env.ZAPI_INSTANCE_ID || process.env.NEXT_PUBLIC_ZAPI_INSTANCE || "";
     }
     if (!finalToken) {
-      finalToken = process.env.NEXT_PUBLIC_ZAPI_TOKEN || '965006A3DBD3AE6A5ACF05EF';
+      finalToken = process.env.ZAPI_TOKEN || process.env.NEXT_PUBLIC_ZAPI_TOKEN || "";
     }
     if (!finalClientToken) {
-      finalClientToken = process.env.ZAPI_CLIENT_TOKEN;
+      finalClientToken = process.env.ZAPI_CLIENT_TOKEN || "";
     }
     
     // Valida se temos todos os dados necessários
     if (!finalInstanceId || !finalToken || !finalClientToken) {
-      console.error('❌ Configuração Z-API incompleta:', {
-        hasInstanceId: !!finalInstanceId,
-        hasToken: !!finalToken,
-        hasClientToken: !!finalClientToken,
-        instanceIdFromParam: !!instanceId,
-        tokenFromParam: !!token,
-        clientTokenFromParam: !!clientToken
-      });
+      safeLogger.error('❌ Configuração Z-API incompleta');
       return NextResponse.json(
         { error: 'Configuração Z-API incompleta. É necessário instanceId, token e clientToken (salvos ou nas variáveis de ambiente)' },
         { status: 500 }
@@ -98,19 +112,15 @@ export async function POST(request: NextRequest) {
 
     // Valida o formato do client-token (deve ter pelo menos 20 caracteres)
     if (finalClientToken.length < 20) {
-      console.error('❌ Client-token inválido (muito curto)');
+      safeLogger.error('❌ Client-token inválido (muito curto)');
     }
 
     // Constrói a URL dinamicamente
     const url = `https://api.z-api.io/instances/${finalInstanceId}/token/${finalToken}/send-text`;
     
-    console.log('🚀 Enviando mensagem via Z-API (API Route)...');
-    console.log('URL:', url);
-    console.log('Headers:', {
-      'Content-Type': 'application/json',
-      'client-token': '***REDACTED***' // Nunca expor o client-token em logs
-    });
-    console.log('Body:', {
+    safeLogger.log('🚀 Enviando mensagem via Z-API (API Route)...');
+    safeLogger.log('URL:', url);
+    safeLogger.log('Body:', {
       phone: phone,
       message: message.substring(0, 50) + (message.length > 50 ? '...' : '')
     });
@@ -127,14 +137,13 @@ export async function POST(request: NextRequest) {
       })
     });
 
-    console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    safeLogger.log('Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
       // Remove qualquer possível exposição do client-token na mensagem de erro
       const safeErrorText = errorText.replace(/client-token[:\s]+[^\s"]+/gi, 'client-token: ***REDACTED***');
-      console.error(`❌ Erro na API Z-API: ${response.status} - ${safeErrorText}`);
+      safeLogger.error(`❌ Erro na API Z-API: ${response.status} - ${safeErrorText}`);
       return NextResponse.json(
         { error: `Erro na API Z-API: ${response.status}` },
         { status: response.status }
@@ -142,7 +151,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await response.json();
-    console.log('✅ Resposta Z-API:', result);
+    safeLogger.log('✅ Resposta Z-API recebida');
     
     // Z-API pode retornar diferentes formatos de sucesso
     const isSuccess = result.success === true || 
@@ -152,7 +161,7 @@ export async function POST(request: NextRequest) {
                      (result.data && result.data.messageId) ||
                      response.status === 200;
     
-    console.log('✅ Mensagem enviada com sucesso:', isSuccess);
+    safeLogger.log('✅ Mensagem enviada com sucesso:', isSuccess);
     
     return NextResponse.json({ 
       success: isSuccess, 
@@ -160,7 +169,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao enviar mensagem via Z-API:', error);
+    safeLogger.error('❌ Erro ao enviar mensagem via Z-API:', error);
     return NextResponse.json(
       { error: 'Erro interno do servidor' },
       { status: 500 }

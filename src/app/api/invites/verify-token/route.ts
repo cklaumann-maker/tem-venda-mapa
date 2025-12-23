@@ -1,27 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { authRateLimit } from '@/lib/rateLimit';
+import { safeLogger } from '@/lib/safeLogger';
+import { validateRequest, verifyTokenSchema } from '@/lib/validation';
 
 /**
  * API Route para verificar token de convite
  * Usa service role key para bypass RLS, pois o usuário ainda não tem conta
  */
 export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await authRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
 
-    if (!token) {
+    // Validação com Zod
+    const validation = await validateRequest(verifyTokenSchema, { token: token || '' });
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Token não fornecido' },
-        { status: 400 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
+
+    const validatedToken = validation.data.token;
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ SUPABASE_SERVICE_ROLE_KEY não configurado');
+      safeLogger.error('❌ SUPABASE_SERVICE_ROLE_KEY não configurado');
       return NextResponse.json(
         { error: 'Configuração do Supabase não encontrada' },
         { status: 500 }
@@ -35,8 +48,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const cleanToken = token.trim();
-    console.log('🔍 [verify-token] Buscando convite com token:', cleanToken.substring(0, 20) + '...');
+    const cleanToken = validatedToken.trim();
+    safeLogger.log('🔍 [verify-token] Buscando convite com token:', cleanToken.substring(0, 20) + '...');
 
     // Buscar convite por token exato
     let { data: invite, error } = await supabaseAdmin
@@ -48,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     // Se não encontrar, tentar busca flexível (para lidar com conversões O->0)
     if (!invite && !error) {
-      console.warn('⚠️ [verify-token] Token exato não encontrado. Tentando busca flexível...');
+      safeLogger.warn('⚠️ [verify-token] Token exato não encontrado. Tentando busca flexível...');
       
       const { data: allActiveInvites, error: allError } = await supabaseAdmin
         .from('user_invites')
@@ -69,22 +82,22 @@ export async function GET(request: NextRequest) {
         });
 
         if (matchingInvite) {
-          console.log('✅ [verify-token] Token encontrado com busca flexível!');
+          safeLogger.log('✅ [verify-token] Token encontrado com busca flexível!');
           invite = matchingInvite;
         }
       }
     }
 
     if (error) {
-      console.error('❌ [verify-token] Erro na query:', error);
+      safeLogger.error('❌ [verify-token] Erro na query:', error);
       return NextResponse.json(
-        { error: 'Erro ao buscar convite', details: error.message },
+        { error: 'Erro ao buscar convite' },
         { status: 500 }
       );
     }
 
     if (!invite) {
-      console.warn('⚠️ [verify-token] Convite não encontrado');
+      safeLogger.warn('⚠️ [verify-token] Convite não encontrado');
       return NextResponse.json(
         { error: 'Convite não encontrado ou token inválido' },
         { status: 404 }
@@ -107,7 +120,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('✅ [verify-token] Convite encontrado:', invite.id);
+    safeLogger.log('✅ [verify-token] Convite encontrado:', invite.id);
     
     // Retornar apenas os dados necessários (sem token por segurança)
     return NextResponse.json({
@@ -122,9 +135,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('❌ [verify-token] Erro inesperado:', error);
+    safeLogger.error('❌ [verify-token] Erro inesperado:', error);
     return NextResponse.json(
-      { error: 'Erro ao verificar token', details: error instanceof Error ? error.message : 'Erro desconhecido' },
+      { error: 'Erro ao verificar token' },
       { status: 500 }
     );
   }

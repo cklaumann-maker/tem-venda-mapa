@@ -1,41 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { strictRateLimit } from '@/lib/rateLimit';
+import { safeLogger } from '@/lib/safeLogger';
+import { validateRequest, deleteUserSchema } from '@/lib/validation';
+import { requireAdmin } from '@/lib/adminAuth';
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await strictRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
-    const { userId } = await request.json();
-
-    if (!userId) {
+    const body = await request.json();
+    
+    // Validação com Zod
+    const validation = await validateRequest(deleteUserSchema, body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'userId é obrigatório' },
-        { status: 400 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const { userId } = validation.data;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: 'Configuração do Supabase não encontrada' },
-        { status: 500 }
-      );
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
-    const { data: { user: currentUser } } = await supabaseAdmin.auth.getUser();
-    if (!currentUser) {
-      return NextResponse.json(
-        { error: 'Usuário não autenticado' },
-        { status: 401 }
-      );
-    }
+    const adminResult = await requireAdmin(request);
+    if ('errorResponse' in adminResult) return adminResult.errorResponse;
+    const { supabaseAdmin, currentUser } = adminResult;
+    if (!supabaseAdmin && errorResponse) return errorResponse;
 
     const { error } = await supabaseAdmin
       .from('profiles')
@@ -47,7 +40,7 @@ export async function POST(request: NextRequest) {
       .eq('id', userId);
 
     if (error) {
-      console.error('Erro ao excluir usuário:', error);
+      safeLogger.error('Erro ao excluir usuário:', error);
       return NextResponse.json(
         { error: error.message },
         { status: 400 }
@@ -56,9 +49,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Erro ao excluir usuário:', error);
+    safeLogger.error('Erro ao excluir usuário:', error);
     return NextResponse.json(
-      { error: 'Erro ao excluir usuário', details: error instanceof Error ? error.message : 'Erro desconhecido' },
+      { error: 'Erro ao excluir usuário' },
       { status: 500 }
     );
   }

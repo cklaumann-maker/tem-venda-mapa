@@ -1,20 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { strictRateLimit } from '@/lib/rateLimit';
+import { safeLogger } from '@/lib/safeLogger';
+import { validateRequest, createUserSchema } from '@/lib/validation';
+import { requireAdmin } from '@/lib/adminAuth';
 
 /**
  * API Route para criar usuário (requer service role key)
  * Usado na ativação de conta
  */
 export async function POST(request: NextRequest) {
-  try {
-    const { email, password, userId, inviteData, inviteId, token } = await request.json();
+  // Rate limiting
+  const rateLimitResponse = await strictRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
 
-    if (!email || !password) {
+  try {
+    const body = await request.json();
+    
+    // Validação com Zod
+    const validation = await validateRequest(createUserSchema, body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Email e senha são obrigatórios' },
-        { status: 400 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
+
+    const { email, password, userId, inviteData, inviteId, token } = body;
 
     // Se tem inviteId mas não tem inviteData, buscar do banco
     let finalInviteData = inviteData;
@@ -40,22 +54,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Usar service role key para operações admin
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: 'Configuração do Supabase não encontrada' },
-        { status: 500 }
-      );
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
+    const adminResult = await requireAdmin(request);
+    if ('errorResponse' in adminResult) return adminResult.errorResponse;
+    const { supabaseAdmin } = adminResult;
 
     let finalUserId = userId;
 
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
 
       if (existingUser) {
         // Usuário já existe, atualizar senha
-        console.log('ℹ️ Usuário já existe, atualizando senha:', existingUser.id);
+        safeLogger.log('ℹ️ Usuário já existe, atualizando senha:', existingUser.id);
         finalUserId = existingUser.id;
         
         const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
@@ -182,10 +183,10 @@ export async function POST(request: NextRequest) {
             });
 
           if (membersError) {
-            console.error('Erro ao criar store_members:', membersError);
+            safeLogger.error('Erro ao criar store_members:', membersError);
             // Não falhar se isso der erro, mas logar
           } else {
-            console.log(`✅ Criadas ${storeMembers.length} entradas em store_members para ${userRole}`);
+            safeLogger.log(`✅ Criadas ${storeMembers.length} entradas em store_members para ${userRole}`);
           }
         }
       } else if (userStoreId) {
@@ -202,7 +203,7 @@ export async function POST(request: NextRequest) {
           });
 
         if (memberError) {
-          console.error('Erro ao criar store_member:', memberError);
+          safeLogger.error('Erro ao criar store_member:', memberError);
         }
       }
     } else if (userStoreId) {
@@ -219,7 +220,7 @@ export async function POST(request: NextRequest) {
         });
 
       if (memberError) {
-        console.error('Erro ao criar store_member:', memberError);
+        safeLogger.error('Erro ao criar store_member:', memberError);
       }
     }
 
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
         .eq('id', inviteIdToMark);
 
       if (inviteError) {
-        console.error('Erro ao marcar convite como usado:', inviteError);
+        safeLogger.error('Erro ao marcar convite como usado:', inviteError);
         // Não falhar se isso der erro
       }
     }
@@ -242,9 +243,9 @@ export async function POST(request: NextRequest) {
       userId: finalUserId,
     });
   } catch (error: any) {
-    console.error('Erro ao criar usuário:', error);
+    safeLogger.error('Erro ao criar usuário:', error);
     return NextResponse.json(
-      { error: error.message || 'Erro ao criar usuário' },
+      { error: 'Erro interno do servidor' },
       { status: 500 }
     );
   }

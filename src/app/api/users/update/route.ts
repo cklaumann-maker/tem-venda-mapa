@@ -1,36 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { apiRateLimit } from '@/lib/rateLimit';
+import { safeLogger } from '@/lib/safeLogger';
+import { validateRequest, updateUserSchema } from '@/lib/validation';
+import { requireAdmin } from '@/lib/adminAuth';
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await apiRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
-    const { userId, full_name, role, network_id, store_id } = await request.json();
-
-    if (!userId) {
+    const body = await request.json();
+    
+    // Validação com Zod
+    const validation = await validateRequest(updateUserSchema, body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'userId é obrigatório' },
-        { status: 400 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const { userId, full_name, role, network_id, store_id } = validation.data;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: 'Configuração do Supabase não encontrada' },
-        { status: 500 }
-      );
-    }
-
-    // Criar cliente admin com service role
-    // Nota: Esta rota já está protegida no frontend através de rotas protegidas
-    // O service role key permite operações administrativas
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
+    const adminResult = await requireAdmin(request);
+    if ('errorResponse' in adminResult) return adminResult.errorResponse;
+    const { supabaseAdmin } = adminResult;
 
     const updateData: any = {};
 
@@ -62,7 +59,7 @@ export async function POST(request: NextRequest) {
       .eq('id', userId);
 
     if (error) {
-      console.error('Erro ao atualizar usuário:', error);
+      safeLogger.error('Erro ao atualizar usuário:', error);
       return NextResponse.json(
         { error: error.message },
         { status: 400 }
@@ -71,9 +68,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Erro ao atualizar usuário:', error);
+    safeLogger.error('Erro ao atualizar usuário:', error);
     return NextResponse.json(
-      { error: 'Erro ao atualizar usuário', details: error instanceof Error ? error.message : 'Erro desconhecido' },
+      { error: 'Erro ao atualizar usuário' },
       { status: 500 }
     );
   }

@@ -841,7 +841,11 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       : currentHour >= 12 && currentHour < 18
       ? "Boa tarde"
       : "Boa noite";
-  const greetingMessage = `${greetingBase}, ${storeTitle}!`;
+  const isViewingAllStoresHeader = currentStoreId === "all";
+  const greetingName = isViewingAllStoresHeader
+    ? currentStore?.networkName || currentStore?.companyName || storeTitle
+    : storeTitle;
+  const greetingMessage = `${greetingBase}, ${greetingName}!`;
 
   const legacyHome = (
     <>
@@ -1062,10 +1066,6 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                 >
                   <Cog className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
                   <span className="hidden lg:inline">Configurações</span>
-                </Button>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 sm:gap-2 text-xs sm:text-sm">
-                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
-                  <span className="hidden lg:inline">Exportar</span>
                 </Button>
               </div>
               

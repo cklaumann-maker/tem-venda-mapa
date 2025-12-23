@@ -1,33 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { apiRateLimit } from '@/lib/rateLimit';
+import { safeLogger } from '@/lib/safeLogger';
+import { validateRequest, toggleActiveSchema } from '@/lib/validation';
+import { requireAdmin } from '@/lib/adminAuth';
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await apiRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
-    const { userId, isActive } = await request.json();
-
-    if (!userId || typeof isActive !== 'boolean') {
+    const body = await request.json();
+    
+    // Validação com Zod
+    const validation = await validateRequest(toggleActiveSchema, body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'userId e isActive são obrigatórios' },
-        { status: 400 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const { userId, isActive } = validation.data;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: 'Configuração do Supabase não encontrada' },
-        { status: 500 }
-      );
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
+    const adminResult = await requireAdmin(request);
+    if ('errorResponse' in adminResult) return adminResult.errorResponse;
+    const { supabaseAdmin } = adminResult;
 
     const { error } = await supabaseAdmin
       .from('profiles')
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       .eq('id', userId);
 
     if (error) {
-      console.error('Erro ao alterar status do usuário:', error);
+      safeLogger.error('Erro ao alterar status do usuário:', error);
       return NextResponse.json(
         { error: error.message },
         { status: 400 }
@@ -44,9 +44,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Erro ao alterar status do usuário:', error);
+    safeLogger.error('Erro ao alterar status do usuário:', error);
     return NextResponse.json(
-      { error: 'Erro ao alterar status do usuário', details: error instanceof Error ? error.message : 'Erro desconhecido' },
+      { error: 'Erro ao alterar status do usuário' },
       { status: 500 }
     );
   }
