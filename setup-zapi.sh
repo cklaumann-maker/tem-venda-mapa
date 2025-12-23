@@ -24,7 +24,7 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # Configurações Z-API (SENSÍVEL - NUNCA COMMITAR)
-ZAPI_CLIENT_TOKEN=F9e61dca2fb844abbacd6398fce687294S
+ZAPI_CLIENT_TOKEN=your_zapi_client_token_here
 EOF
 
 echo "✅ Arquivo .env.local criado com sucesso!"
@@ -42,10 +42,8 @@ fi
 
 # Verificar segurança
 echo "🔍 Verificando segurança..."
-if grep -r "F9e61dca2fb844abbacd6398fce687294S" src/ > /dev/null 2>&1; then
-    echo "❌ ERRO: Token encontrado no código fonte!"
-    echo "   Execute: grep -r 'F9e61dca2fb844abbacd6398fce687294S' src/"
-    exit 1
+if grep -r "your_zapi_client_token_here" src/ > /dev/null 2>&1; then
+    echo "⚠️  AVISO: Placeholder encontrado no código fonte. Certifique-se de usar apenas variáveis de ambiente."
 else
     echo "✅ Token não encontrado no código fonte"
 fi

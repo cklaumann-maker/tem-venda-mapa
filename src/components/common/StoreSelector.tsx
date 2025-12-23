@@ -72,7 +72,7 @@ export function StoreSelector() {
             <SelectValue placeholder="Loja" />
           </SelectTrigger>
           <SelectContent>
-            {isAdmin && stores.length > 1 && (
+            {isAdmin && stores.length > 0 && (
               <SelectItem value="all">Todas as lojas</SelectItem>
             )}
             {stores.map((store) => (

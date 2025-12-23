@@ -228,7 +228,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
               networkName: networkMap.get(networkId || "") ?? null,
               companyId: row.org_id || row.network_id || null,
               companyName: networkMap.get(networkId || "") ?? null,
-              logoUrl: row.logo_url || networkLogo,
+              logoUrl: networkLogo,
               storeRole: "admin",
               isActive: row.is_active ?? true,
               branding: {
@@ -322,7 +322,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
               networkName: networkMap.get(networkId || "") ?? null,
               companyId: row.org_id || row.network_id || null,
               companyName: networkMap.get(networkId || "") ?? null,
-              logoUrl: row.logo_url || networkLogo,
+              logoUrl: networkLogo,
               isActive: row.is_active ?? true,
               branding: {
                 primaryColor: row.brand_primary_color,
@@ -379,14 +379,18 @@ export function StoreProvider({ children }: StoreProviderProps) {
         : storeRows;
 
       // Definir loja atual
-      const preferredStoreId = profile?.default_store_id;
-      const fallbackStoreId = storesForNetwork[0]?.id ?? null;
-      const resolvedStoreId =
-        preferredStoreId && storesForNetwork.some((store) => store.id === preferredStoreId)
-          ? preferredStoreId
-          : fallbackStoreId;
-
-      setCurrentStoreIdState(resolvedStoreId);
+      // Se for admin, começar com "Todas as lojas" se houver lojas na rede
+      if (role === "admin" && storesForNetwork.length > 0) {
+        setCurrentStoreIdState("all");
+      } else {
+        const preferredStoreId = profile?.default_store_id;
+        const fallbackStoreId = storesForNetwork[0]?.id ?? null;
+        const resolvedStoreId =
+          preferredStoreId && storesForNetwork.some((store) => store.id === preferredStoreId)
+            ? preferredStoreId
+            : fallbackStoreId;
+        setCurrentStoreIdState(resolvedStoreId);
+      }
 
       // Definir modo de visualização padrão
       // Gerentes podem ver rede, outros apenas loja
@@ -419,16 +423,27 @@ export function StoreProvider({ children }: StoreProviderProps) {
       ? stores.filter((s) => (s.networkId || s.companyId) === id)
       : stores;
 
+    // Se estava vendo "Todas as lojas", manter "Todas as lojas" da nova rede
     if (currentStoreId === "all") {
+      // Manter "all" mas garantir que está na nova rede
       return;
     }
 
+    // Se a loja atual não pertence à nova rede, ajustar
     const currentStoreBelongsToNetwork = id
       ? storesForNetwork.some((s) => s.id === currentStoreId)
       : true;
 
-    if (!currentStoreBelongsToNetwork && storesForNetwork.length > 0) {
-      await handleChangeStore(storesForNetwork[0].id);
+    // Se é admin e a loja atual não pertence à rede, permitir escolher "Todas as lojas" ou primeira loja
+    if (!currentStoreBelongsToNetwork) {
+      const isAdmin = profileRole === "admin";
+      if (isAdmin && storesForNetwork.length > 0) {
+        // Admin pode escolher "Todas as lojas" automaticamente, ou primeira loja
+        await handleChangeStore("all");
+      } else if (storesForNetwork.length > 0) {
+        // Não-admin: selecionar primeira loja da rede
+        await handleChangeStore(storesForNetwork[0].id);
+      }
     }
   };
 
@@ -440,6 +455,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
     setCurrentStoreIdState(id);
     if (!user) return;
 
+    // Se selecionou "Todas as lojas", não salvar no perfil (é apenas visualização)
     if (id === "all") {
       return;
     }
@@ -481,6 +497,32 @@ export function StoreProvider({ children }: StoreProviderProps) {
   const isManager = profileRole === "manager" || profileRole === "owner";
   const canViewNetwork = isManager || profileRole === "admin";
 
+  // Quando "todas as lojas" está selecionado, criar um store fictício com logo da rede
+  const getCurrentStore = (): StoreSummary | null => {
+    if (currentStoreId === "all") {
+      const currentNetwork = networks.find((n) => n.id === currentNetworkId);
+      if (currentNetworkId && currentNetwork) {
+        // Buscar logo da rede atual (qualquer loja da rede tem a logo da rede)
+        const networkStore = storesForCurrentNetwork.find((s) => (s.networkId || s.companyId) === currentNetworkId);
+        return {
+          id: "all",
+          name: "Todas as lojas",
+          networkId: currentNetworkId,
+          networkName: currentNetwork.name,
+          companyId: currentNetworkId,
+          companyName: currentNetwork.name,
+          logoUrl: networkStore?.logoUrl ?? null, // Logo da rede (agora sempre vem da rede, não da loja)
+          storeRole: "admin",
+          isActive: true,
+        };
+      }
+      return null;
+    }
+    return currentStoreId
+      ? storesForCurrentNetwork.find((store) => store.id === currentStoreId) ?? null
+      : null;
+  };
+
   const value: StoreContextValue = {
     loading,
     networks,
@@ -489,9 +531,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
     currentNetworkId,
     currentCompanyId: currentNetworkId, // Compatibilidade: alias para currentNetworkId
     currentStoreId,
-    currentStore: currentStoreId && currentStoreId !== "all"
-      ? storesForCurrentNetwork.find((store) => store.id === currentStoreId) ?? null
-      : null,
+    currentStore: getCurrentStore(),
     viewMode,
     profileRole,
     isAdmin: profileRole === "admin",

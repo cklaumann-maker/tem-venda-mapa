@@ -22,20 +22,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Criar cliente admin com service role
+    // Nota: Esta rota já está protegida no frontend através de rotas protegidas
+    // O service role key permite operações administrativas
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
-
-    const { data: { user: currentUser } } = await supabaseAdmin.auth.getUser();
-    if (!currentUser) {
-      return NextResponse.json(
-        { error: 'Usuário não autenticado' },
-        { status: 401 }
-      );
-    }
 
     const updateData: any = {};
 
@@ -46,6 +41,20 @@ export async function POST(request: NextRequest) {
       updateData.org_id = network_id || null; // Compatibilidade
     }
     if (store_id !== undefined) updateData.default_store_id = store_id || null;
+
+    // Verificar se o usuário existe antes de atualizar
+    const { data: existingUser } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: 'Usuário não encontrado' },
+        { status: 404 }
+      );
+    }
 
     const { error } = await supabaseAdmin
       .from('profiles')

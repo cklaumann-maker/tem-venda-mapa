@@ -33,6 +33,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Edit2, Trash2, Power, PowerOff, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface User {
   id: string;
@@ -159,6 +165,7 @@ export function GerenciarUsuariosView() {
 
         if (response.ok) {
           const { emails } = await response.json();
+          // emails é um objeto Record<string, string> onde a chave é o userId e o valor é o email
           usersData.forEach((u: any) => {
             u.email = emails[u.id] || "Email não encontrado";
           });
@@ -208,7 +215,7 @@ export function GerenciarUsuariosView() {
       full_name: user.full_name || "",
       role: user.role,
       network_id: user.network_id || user.org_id || "",
-      store_id: user.default_store_id || "",
+      store_id: user.default_store_id || "none",
     });
   };
 
@@ -220,13 +227,40 @@ export function GerenciarUsuariosView() {
     setSuccess("");
 
     try {
+      const updateData: any = {
+        userId: editingUser.id,
+        full_name: editFormData.full_name,
+        role: editFormData.role,
+      };
+
+      if (isAdmin) {
+        if (editFormData.network_id) {
+          updateData.network_id = editFormData.network_id;
+        }
+        if (editFormData.store_id === "none" || !editFormData.store_id) {
+          updateData.store_id = null;
+        } else {
+          updateData.store_id = editFormData.store_id;
+        }
+      }
+
+      // Obter token de autenticação
+      const supabase = supabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/users/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: editingUser.id,
-          ...editFormData,
-        }),
+        headers,
+        body: JSON.stringify(updateData),
       });
 
       if (!response.ok) {
@@ -255,9 +289,22 @@ export function GerenciarUsuariosView() {
     setSuccess("");
 
     try {
+      // Obter token de autenticação
+      const supabase = supabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/users/toggle-active', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           userId: user.id,
           isActive: !user.is_active,
@@ -289,9 +336,22 @@ export function GerenciarUsuariosView() {
     setSuccess("");
 
     try {
+      // Obter token de autenticação
+      const supabase = supabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/users/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           userId: user.id,
         }),
@@ -331,7 +391,8 @@ export function GerenciarUsuariosView() {
   });
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider>
+      <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Gerenciar Usuários</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -500,37 +561,61 @@ export function GerenciarUsuariosView() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEdit(user)}
-                        >
-                          <Edit2 className="w-3 h-3" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleEdit(user)}
+                              aria-label="Editar usuário"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Editar informações do usuário</p>
+                          </TooltipContent>
+                        </Tooltip>
 
                         {!user.deleted_at && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleToggleActive(user)}
-                            disabled={loading}
-                          >
-                            {user.is_active ? (
-                              <PowerOff className="w-3 h-3 text-yellow-600" />
-                            ) : (
-                              <Power className="w-3 h-3 text-green-600" />
-                            )}
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleToggleActive(user)}
+                                disabled={loading}
+                                aria-label={user.is_active ? "Desativar usuário" : "Ativar usuário"}
+                              >
+                                {user.is_active ? (
+                                  <PowerOff className="w-3 h-3 text-yellow-600" />
+                                ) : (
+                                  <Power className="w-3 h-3 text-green-600" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{user.is_active ? "Desativar usuário" : "Ativar usuário"}</p>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
 
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(user)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="w-3 h-3 text-red-600" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDelete(user)}
+                              disabled={loading || !!user.deleted_at}
+                              aria-label="Excluir usuário"
+                            >
+                              <Trash2 className="w-3 h-3 text-red-600" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{user.deleted_at ? "Usuário já excluído" : "Excluir usuário permanentemente"}</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -596,13 +681,13 @@ export function GerenciarUsuariosView() {
                   <div className="space-y-2">
                     <Label>Rede</Label>
                     <Select
-                      value={editFormData.network_id}
+                      value={editFormData.network_id || ""}
                       onValueChange={(value) =>
-                        setEditFormData({ ...editFormData, network_id: value })
+                        setEditFormData({ ...editFormData, network_id: value || "" })
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Selecione a rede" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableNetworks.map((network) => (
@@ -616,16 +701,16 @@ export function GerenciarUsuariosView() {
                   <div className="space-y-2">
                     <Label>Loja Padrão</Label>
                     <Select
-                      value={editFormData.store_id}
+                      value={editFormData.store_id || "none"}
                       onValueChange={(value) =>
-                        setEditFormData({ ...editFormData, store_id: value })
+                        setEditFormData({ ...editFormData, store_id: value === "none" ? "" : value })
                       }
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhuma</SelectItem>
+                        <SelectItem value="none">Nenhuma</SelectItem>
                         {filteredStores.map((store) => (
                           <SelectItem key={store.id} value={store.id}>
                             {store.name}
@@ -646,6 +731,7 @@ export function GerenciarUsuariosView() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

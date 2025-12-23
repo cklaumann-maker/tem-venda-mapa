@@ -26,6 +26,12 @@ import { Badge } from "@/components/ui/badge";
 import { sendInviteEmail } from "@/lib/email";
 import { UserPlus, Mail, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface UserInvite {
   id: string;
@@ -667,7 +673,8 @@ export function GerenciarConvitesView() {
   );
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider>
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Gerenciar Usuários</h2>
@@ -1031,24 +1038,40 @@ export function GerenciarConvitesView() {
                       <TableCell>
                         <div className="flex gap-2">
                           {!isUsed && !isExpired && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleResendInvite(invite)}
-                              disabled={loading}
-                            >
-                              <Mail className="w-3 h-3 mr-1" />
-                              Reenviar
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleResendInvite(invite)}
+                                  disabled={loading}
+                                  aria-label="Reenviar convite"
+                                >
+                                  <Mail className="w-3 h-3 mr-1" />
+                                  Reenviar
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Reenviar email de convite para {invite.email}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteInvite(invite.id)}
-                            disabled={loading}
-                          >
-                            <Trash2 className="w-3 h-3 text-red-600" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteInvite(invite.id)}
+                                disabled={loading}
+                                aria-label="Excluir convite"
+                              >
+                                <Trash2 className="w-3 h-3 text-red-600" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Excluir convite permanentemente</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1059,7 +1082,8 @@ export function GerenciarConvitesView() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 

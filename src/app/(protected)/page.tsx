@@ -483,15 +483,19 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
   }, [isAdmin, currentStore?.id]);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin && stores.length > 0) {
+      // Se não há loja selecionada, ordenar lojas alfabeticamente e selecionar a primeira
       if (!tasksStoreId) {
-        const fallback = currentStore?.id ?? stores[0]?.id ?? null;
-        if (fallback && fallback !== tasksStoreId) {
-          setTasksStoreId(fallback);
+        const sortedStores = [...stores].sort((a, b) => 
+          a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+        );
+        const firstStore = sortedStores[0];
+        if (firstStore) {
+          setTasksStoreId(firstStore.id);
         }
       }
     }
-  }, [isAdmin, currentStore?.id, stores, tasksStoreId]);
+  }, [isAdmin, stores, tasksStoreId]);
 
   useEffect(() => {
     setTasksError(null);

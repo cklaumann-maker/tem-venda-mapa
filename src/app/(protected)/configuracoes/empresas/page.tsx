@@ -17,10 +17,10 @@ type FeedbackState = {
 } | null;
 
 function ConfiguracoesEmpresasContent() {
-  const { stores, isAdmin, refresh } = useStore();
+  const { stores, networks, isAdmin, refresh } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
 
-  const [logoStoreId, setLogoStoreId] = useState<string>("");
+  const [logoNetworkId, setLogoNetworkId] = useState<string>("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoFeedback, setLogoFeedback] = useState<FeedbackState>(null);
@@ -35,8 +35,12 @@ function ConfiguracoesEmpresasContent() {
   const [deactivateFeedback, setDeactivateFeedback] = useState<FeedbackState>(null);
 
   useEffect(() => {
+    if (networks.length === 0) return;
+    setLogoNetworkId((prev) => prev || networks[0].id);
+  }, [networks]);
+
+  useEffect(() => {
     if (stores.length === 0) return;
-    setLogoStoreId((prev) => prev || stores[0].id);
     setRenameStoreId((prev) => prev || stores[0].id);
     setDeactivateStoreId((prev) => prev || stores[0].id);
   }, [stores]);
@@ -48,8 +52,8 @@ function ConfiguracoesEmpresasContent() {
   }, [renameStoreId, stores]);
 
   useEffect(() => {
-    if (logoStoreId && !stores.some((store) => store.id === logoStoreId)) {
-      setLogoStoreId(stores[0]?.id ?? "");
+    if (logoNetworkId && !networks.some((network) => network.id === logoNetworkId)) {
+      setLogoNetworkId(networks[0]?.id ?? "");
     }
     if (renameStoreId && !stores.some((store) => store.id === renameStoreId)) {
       setRenameStoreId(stores[0]?.id ?? "");
@@ -57,11 +61,11 @@ function ConfiguracoesEmpresasContent() {
     if (deactivateStoreId && !stores.some((store) => store.id === deactivateStoreId)) {
       setDeactivateStoreId(stores[0]?.id ?? "");
     }
-  }, [stores, logoStoreId, renameStoreId, deactivateStoreId]);
+  }, [networks, stores, logoNetworkId, renameStoreId, deactivateStoreId]);
 
   const handleUploadLogo = async () => {
-    if (!logoStoreId || !logoFile) {
-      setLogoFeedback({ type: "error", message: "Selecione a empresa e um arquivo válido antes de enviar." });
+    if (!logoNetworkId || !logoFile) {
+      setLogoFeedback({ type: "error", message: "Selecione a rede e um arquivo válido antes de enviar." });
       return;
     }
 
@@ -69,7 +73,7 @@ function ConfiguracoesEmpresasContent() {
       setUploadingLogo(true);
       setLogoFeedback(null);
       const extension = logoFile.name.split(".").pop()?.toLowerCase() || "png";
-      const filePath = `${logoStoreId}/${Date.now()}.${extension}`;
+      const filePath = `${logoNetworkId}/${Date.now()}.${extension}`;
       const { error: uploadError } = await supabase.storage.from("company-logos").upload(filePath, logoFile, {
         cacheControl: "3600",
         upsert: false,
@@ -80,15 +84,27 @@ function ConfiguracoesEmpresasContent() {
       const publicUrl = urlData?.publicUrl;
       if (!publicUrl) throw new Error("Não foi possível obter o link público da imagem.");
 
-      const { error: updateError } = await supabase.from("stores").update({ logo_url: publicUrl }).eq("id", logoStoreId);
+      // Atualizar logo na tabela networks primeiro, se falhar tenta orgs (compatibilidade)
+      let updateError = null;
+      const { error: networkUpdateError } = await supabase.from("networks").update({ logo_url: publicUrl }).eq("id", logoNetworkId);
+      if (networkUpdateError) {
+        // Fallback para orgs caso networks não exista
+        const { error: orgUpdateError } = await supabase.from("orgs").update({ logo_url: publicUrl }).eq("id", logoNetworkId);
+        if (orgUpdateError) {
+          updateError = orgUpdateError;
+        }
+      } else {
+        updateError = networkUpdateError;
+      }
+
       if (updateError) throw updateError;
 
       await refresh();
       setLogoFile(null);
-      setLogoFeedback({ type: "success", message: "Logo atualizada com sucesso." });
+      setLogoFeedback({ type: "success", message: "Logo da rede atualizada com sucesso." });
     } catch (error) {
       console.error(error);
-      setLogoFeedback({ type: "error", message: "Erro ao atualizar a logo. Tente novamente." });
+      setLogoFeedback({ type: "error", message: "Erro ao atualizar a logo da rede. Tente novamente." });
     } finally {
       setUploadingLogo(false);
     }
@@ -184,24 +200,24 @@ function ConfiguracoesEmpresasContent() {
             <div>
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 <UploadCloud className="w-4 h-4 text-emerald-600" />
-                Alterar logos das empresas
+                Alterar logos das redes
               </h3>
               <p className="text-xs text-muted-foreground">
-                Carregue uma nova imagem para representar a empresa no cabeçalho e áreas principais do sistema.
+                Carregue uma nova imagem para representar a rede. Todas as lojas da rede usarão esta logo.
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-[240px_1fr]">
               <div className="space-y-2">
-                <Label>Empresa</Label>
-                <Select value={logoStoreId} onValueChange={setLogoStoreId}>
+                <Label>Rede</Label>
+                <Select value={logoNetworkId} onValueChange={setLogoNetworkId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione a empresa" />
+                    <SelectValue placeholder="Selecione a rede" />
                   </SelectTrigger>
                   <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
+                    {networks.map((network) => (
+                      <SelectItem key={network.id} value={network.id}>
+                        {network.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

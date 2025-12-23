@@ -43,3 +43,14 @@ next-env.d.ts
 
 # Z-API sensitive files
 src/lib/zapi-secure.ts
+
+# SSH keys and private keys
+*.pem
+*.key
+id_rsa*
+ck3009*
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+SSH
