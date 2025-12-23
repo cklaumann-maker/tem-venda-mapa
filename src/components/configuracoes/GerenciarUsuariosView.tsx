@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useStore } from "@/contexts/StoreContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -156,20 +156,61 @@ export function GerenciarUsuariosView() {
       // Buscar emails dos usuários do auth.users
       const userIds = usersData.map((u: any) => u.id);
       if (userIds.length > 0) {
-        // Usar API route para buscar emails
-        const response = await fetch('/api/users/get-emails', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userIds }),
-        });
+        try {
+          // Obter token de autenticação
+          const supabase = supabaseClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
 
-        if (response.ok) {
-          const { emails } = await response.json();
-          // emails é um objeto Record<string, string> onde a chave é o userId e o valor é o email
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+          };
+
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+
+          // Usar API route para buscar emails
+          const response = await fetch('/api/users/get-emails', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ userIds }),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            const emails = result.emails || {};
+            
+            // emails é um objeto Record<string, string> onde a chave é o userId e o valor é o email
+            usersData.forEach((u: any) => {
+              u.email = emails[u.id] || "Email não encontrado";
+            });
+          } else {
+            // Se a API falhar, definir emails como "Erro ao carregar"
+            const errorText = await response.text().catch(() => 'Erro desconhecido');
+            console.warn('Erro ao buscar emails:', response.status, response.statusText, errorText);
+            usersData.forEach((u: any) => {
+              if (!u.email || u.email === "") {
+                u.email = "Erro ao carregar email";
+              }
+            });
+          }
+        } catch (err) {
+          console.error('Erro ao buscar emails:', err);
+          // Em caso de erro, definir emails como "Erro ao carregar"
           usersData.forEach((u: any) => {
-            u.email = emails[u.id] || "Email não encontrado";
+            if (!u.email || u.email === "") {
+              u.email = "Erro ao carregar email";
+            }
           });
         }
+      } else {
+        // Se não houver userIds, garantir que todos tenham um email padrão
+        usersData.forEach((u: any) => {
+          if (!u.email || u.email === "") {
+            u.email = "Email não disponível";
+          }
+        });
       }
 
       setUsers(usersData);
@@ -211,11 +252,16 @@ export function GerenciarUsuariosView() {
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
+    // Se default_store_id for null e o usuário tiver network_id, é "todas as lojas"
+    const hasNetwork = !!(user.network_id || user.org_id);
+    const hasNoStore = !user.default_store_id;
+    const storeId = hasNetwork && hasNoStore ? "all_stores" : (user.default_store_id || "none");
+    
     setEditFormData({
       full_name: user.full_name || "",
       role: user.role,
       network_id: user.network_id || user.org_id || "",
-      store_id: user.default_store_id || "none",
+      store_id: storeId,
     });
   };
 
@@ -237,8 +283,14 @@ export function GerenciarUsuariosView() {
         if (editFormData.network_id) {
           updateData.network_id = editFormData.network_id;
         }
-        if (editFormData.store_id === "none" || !editFormData.store_id) {
+        // "all_stores" significa que o usuário tem acesso a todas as lojas da rede
+        // Neste caso, salvamos como null no default_store_id
+        if (editFormData.store_id === "none" || !editFormData.store_id || editFormData.store_id === "") {
           updateData.store_id = null;
+        } else if (editFormData.store_id === "all_stores") {
+          // "Todas as lojas" - salvar como null para indicar acesso a todas as lojas da rede
+          updateData.store_id = null;
+          // Nota: Podemos adicionar um campo específico no futuro para indicar "todas as lojas"
         } else {
           updateData.store_id = editFormData.store_id;
         }
@@ -384,11 +436,45 @@ export function GerenciarUsuariosView() {
     return labels[role] || role;
   };
 
-  const filteredStores = stores.filter((s) => {
-    const selectedNetwork = editFormData.network_id || filterNetworkId;
-    if (selectedNetwork === "all") return true;
-    return (s.networkId || s.companyId) === selectedNetwork;
-  });
+  // Filtrar lojas baseado na rede selecionada no formulário de edição
+  const filteredStores = useMemo(() => {
+    const selectedNetwork = editFormData.network_id;
+    
+    // Se não houver rede selecionada no formulário, mostrar todas as lojas
+    if (!selectedNetwork || selectedNetwork === "" || selectedNetwork === "all") {
+      return stores;
+    }
+    
+    // Filtrar por networkId ou companyId (compatibilidade)
+    const filtered = stores.filter((s) => {
+      const matchesNetworkId = s.networkId === selectedNetwork;
+      const matchesCompanyId = s.companyId === selectedNetwork;
+      return matchesNetworkId || matchesCompanyId;
+    });
+    
+    // Log para debug
+    if (selectedNetwork) {
+      console.log('🔍 Filtro de lojas:', {
+        selectedNetwork,
+        totalStores: stores.length,
+        filteredCount: filtered.length,
+        stores: stores.map(s => ({
+          id: s.id,
+          name: s.name,
+          networkId: s.networkId,
+          companyId: s.companyId
+        })),
+        filtered: filtered.map(s => ({
+          id: s.id,
+          name: s.name,
+          networkId: s.networkId,
+          companyId: s.companyId
+        }))
+      });
+    }
+    
+    return filtered;
+  }, [editFormData.network_id, stores]);
 
   return (
     <TooltipProvider>
@@ -531,7 +617,13 @@ export function GerenciarUsuariosView() {
                     <TableCell className="font-medium">
                       {user.full_name || "Sem nome"}
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      {user.email && user.email !== "" ? (
+                        user.email
+                      ) : (
+                        <span className="text-muted-foreground italic">Carregando email...</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={user.role === "admin" ? "destructive" : "default"}>
                         {getRoleLabel(user.role)}
@@ -540,7 +632,14 @@ export function GerenciarUsuariosView() {
                     {isAdmin && (
                       <TableCell>{user.network_name || "-"}</TableCell>
                     )}
-                    <TableCell>{user.store_name || "Nenhuma"}</TableCell>
+                    <TableCell>
+                      {user.default_store_id 
+                        ? user.store_name || "Nenhuma"
+                        : (user.network_id || user.org_id)
+                          ? "Todas as lojas da rede"
+                          : "Nenhuma"
+                      }
+                    </TableCell>
                     <TableCell>
                       {user.deleted_at ? (
                         <Badge variant="outline" className="bg-red-50">
@@ -682,9 +781,14 @@ export function GerenciarUsuariosView() {
                     <Label>Rede</Label>
                     <Select
                       value={editFormData.network_id || ""}
-                      onValueChange={(value) =>
-                        setEditFormData({ ...editFormData, network_id: value || "" })
-                      }
+                      onValueChange={(value) => {
+                        // Quando a rede muda, resetar a loja padrão para "none"
+                        setEditFormData({ 
+                          ...editFormData, 
+                          network_id: value || "",
+                          store_id: "none" // Resetar loja quando rede muda
+                        });
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione a rede" />
@@ -697,25 +801,46 @@ export function GerenciarUsuariosView() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {editFormData.network_id && (
+                      <p className="text-xs text-muted-foreground">
+                        {filteredStores.length} loja(s) encontrada(s) para esta rede
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Loja Padrão</Label>
                     <Select
                       value={editFormData.store_id || "none"}
-                      onValueChange={(value) =>
-                        setEditFormData({ ...editFormData, store_id: value === "none" ? "" : value })
-                      }
+                      onValueChange={(value) => {
+                        if (value === "all_stores") {
+                          // "Todas as lojas" - salvar como null para indicar acesso a todas
+                          setEditFormData({ ...editFormData, store_id: "all_stores" });
+                        } else if (value === "none") {
+                          setEditFormData({ ...editFormData, store_id: "" });
+                        } else {
+                          setEditFormData({ ...editFormData, store_id: value });
+                        }
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Nenhuma</SelectItem>
-                        {filteredStores.map((store) => (
-                          <SelectItem key={store.id} value={store.id}>
-                            {store.name}
+                        {editFormData.network_id && (
+                          <SelectItem value="all_stores">Todas as lojas da rede</SelectItem>
+                        )}
+                        {filteredStores.length > 0 ? (
+                          filteredStores.map((store) => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="" disabled>
+                            {editFormData.network_id ? "Nenhuma loja encontrada para esta rede" : "Selecione uma rede primeiro"}
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

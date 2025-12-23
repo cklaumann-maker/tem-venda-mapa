@@ -1,171 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense } from "react";
 import { DashboardPage } from "../../page";
 import { useStore } from "@/contexts/StoreContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabaseClient } from "@/lib/supabaseClient";
-import { CheckCircle2, AlertCircle, UploadCloud, Type, Power, Building2 } from "lucide-react";
-
-type FeedbackState = {
-  type: "success" | "error";
-  message: string;
-} | null;
+import { Building2, Type, Power, AlertCircle, ArrowRight, Plus, RotateCcw } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CriarRedeView } from "@/components/configuracoes/empresas/CriarRedeView";
+import { AlterarDadosView } from "@/components/configuracoes/empresas/AlterarDadosView";
+import { DesativarView } from "@/components/configuracoes/empresas/DesativarView";
+import { ReativarView } from "@/components/configuracoes/empresas/ReativarView";
 
 function ConfiguracoesEmpresasContent() {
-  const { stores, networks, isAdmin, refresh } = useStore();
-  const supabase = useMemo(() => supabaseClient(), []);
-
-  const [logoNetworkId, setLogoNetworkId] = useState<string>("");
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [logoFeedback, setLogoFeedback] = useState<FeedbackState>(null);
-
-  const [renameStoreId, setRenameStoreId] = useState<string>("");
-  const [renameValue, setRenameValue] = useState<string>("");
-  const [renaming, setRenaming] = useState(false);
-  const [renameFeedback, setRenameFeedback] = useState<FeedbackState>(null);
-
-  const [deactivateStoreId, setDeactivateStoreId] = useState<string>("");
-  const [deactivating, setDeactivating] = useState(false);
-  const [deactivateFeedback, setDeactivateFeedback] = useState<FeedbackState>(null);
-
-  useEffect(() => {
-    if (networks.length === 0) return;
-    setLogoNetworkId((prev) => prev || networks[0].id);
-  }, [networks]);
-
-  useEffect(() => {
-    if (stores.length === 0) return;
-    setRenameStoreId((prev) => prev || stores[0].id);
-    setDeactivateStoreId((prev) => prev || stores[0].id);
-  }, [stores]);
-
-  useEffect(() => {
-    if (!renameStoreId) return;
-    const current = stores.find((store) => store.id === renameStoreId);
-    setRenameValue(current?.name ?? "");
-  }, [renameStoreId, stores]);
-
-  useEffect(() => {
-    if (logoNetworkId && !networks.some((network) => network.id === logoNetworkId)) {
-      setLogoNetworkId(networks[0]?.id ?? "");
-    }
-    if (renameStoreId && !stores.some((store) => store.id === renameStoreId)) {
-      setRenameStoreId(stores[0]?.id ?? "");
-    }
-    if (deactivateStoreId && !stores.some((store) => store.id === deactivateStoreId)) {
-      setDeactivateStoreId(stores[0]?.id ?? "");
-    }
-  }, [networks, stores, logoNetworkId, renameStoreId, deactivateStoreId]);
-
-  const handleUploadLogo = async () => {
-    if (!logoNetworkId || !logoFile) {
-      setLogoFeedback({ type: "error", message: "Selecione a rede e um arquivo válido antes de enviar." });
-      return;
-    }
-
-    try {
-      setUploadingLogo(true);
-      setLogoFeedback(null);
-      const extension = logoFile.name.split(".").pop()?.toLowerCase() || "png";
-      const filePath = `${logoNetworkId}/${Date.now()}.${extension}`;
-      const { error: uploadError } = await supabase.storage.from("company-logos").upload(filePath, logoFile, {
-        cacheControl: "3600",
-        upsert: false,
-      });
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from("company-logos").getPublicUrl(filePath);
-      const publicUrl = urlData?.publicUrl;
-      if (!publicUrl) throw new Error("Não foi possível obter o link público da imagem.");
-
-      // Atualizar logo na tabela networks primeiro, se falhar tenta orgs (compatibilidade)
-      let updateError = null;
-      const { error: networkUpdateError } = await supabase.from("networks").update({ logo_url: publicUrl }).eq("id", logoNetworkId);
-      if (networkUpdateError) {
-        // Fallback para orgs caso networks não exista
-        const { error: orgUpdateError } = await supabase.from("orgs").update({ logo_url: publicUrl }).eq("id", logoNetworkId);
-        if (orgUpdateError) {
-          updateError = orgUpdateError;
-        }
-      } else {
-        updateError = networkUpdateError;
-      }
-
-      if (updateError) throw updateError;
-
-      await refresh();
-      setLogoFile(null);
-      setLogoFeedback({ type: "success", message: "Logo da rede atualizada com sucesso." });
-    } catch (error) {
-      console.error(error);
-      setLogoFeedback({ type: "error", message: "Erro ao atualizar a logo da rede. Tente novamente." });
-    } finally {
-      setUploadingLogo(false);
-    }
-  };
-
-  const handleRenameStore = async () => {
-    const trimmed = renameValue.trim();
-    if (!renameStoreId || trimmed.length < 2) {
-      setRenameFeedback({ type: "error", message: "Informe um nome válido (mínimo 2 caracteres)." });
-      return;
-    }
-
-    try {
-      setRenaming(true);
-      setRenameFeedback(null);
-      const { error } = await supabase.from("stores").update({ name: trimmed }).eq("id", renameStoreId);
-      if (error) throw error;
-      await refresh();
-      setRenameFeedback({ type: "success", message: "Nome da empresa atualizado com sucesso." });
-    } catch (error) {
-      console.error(error);
-      setRenameFeedback({ type: "error", message: "Erro ao atualizar o nome da empresa." });
-    } finally {
-      setRenaming(false);
-    }
-  };
-
-  const handleDeactivateStore = async () => {
-    if (!deactivateStoreId) {
-      setDeactivateFeedback({ type: "error", message: "Selecione a empresa que deseja desativar." });
-      return;
-    }
-    if (!window.confirm("Tem certeza que deseja desativar esta empresa? Os usuários associados perderão acesso.")) {
-      return;
-    }
-
-    try {
-      setDeactivating(true);
-      setDeactivateFeedback(null);
-
-      const { error: membersError } = await supabase
-        .from("store_members")
-        .update({ active: false })
-        .eq("store_id", deactivateStoreId);
-      if (membersError) throw membersError;
-
-      const { error: storeError } = await supabase
-        .from("stores")
-        .update({ is_active: false })
-        .eq("id", deactivateStoreId);
-      if (storeError) throw storeError;
-
-      await refresh();
-      setDeactivateFeedback({ type: "success", message: "Empresa desativada com sucesso." });
-    } catch (error) {
-      console.error(error);
-      setDeactivateFeedback({ type: "error", message: "Erro ao desativar a empresa. Tente novamente." });
-    } finally {
-      setDeactivating(false);
-    }
-  };
+  const { isAdmin } = useStore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view");
 
   if (!isAdmin) {
     return (
@@ -186,192 +37,170 @@ function ConfiguracoesEmpresasContent() {
     );
   }
 
+  // Renderizar view específica se houver
+  if (view === "criar-rede") {
+    return <CriarRedeView />;
+  }
+  if (view === "alterar-dados") {
+    return <AlterarDadosView />;
+  }
+  if (view === "desativar") {
+    return <DesativarView />;
+  }
+  if (view === "reativar") {
+    return <ReativarView />;
+  }
+
+  // Página principal com botões de navegação
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-gray-900">
-            <Building2 className="w-5 h-5 text-emerald-600" />
+            <Building2 className="w-6 h-6 text-emerald-600" />
             Gestão de Empresas
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-8">
-          <section className="space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <UploadCloud className="w-4 h-4 text-emerald-600" />
-                Alterar logos das redes
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Carregue uma nova imagem para representar a rede. Todas as lojas da rede usarão esta logo.
-              </p>
-            </div>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-6">
+            Gerencie as configurações das empresas, redes e lojas do sistema. Selecione uma opção abaixo para começar.
+          </p>
 
-            <div className="grid gap-3 sm:grid-cols-[240px_1fr]">
-              <div className="space-y-2">
-                <Label>Rede</Label>
-                <Select value={logoNetworkId} onValueChange={setLogoNetworkId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a rede" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {networks.map((network) => (
-                      <SelectItem key={network.id} value={network.id}>
-                        {network.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <Label>Arquivo da logo</Label>
-                  <Input
-                    type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/heic"
-                    onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Formatos aceitos: png, jpeg, jpg, heic. Tamanho recomendado 512x512.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleUploadLogo} disabled={!logoFile || uploadingLogo}>
-                    {uploadingLogo ? "Enviando..." : "Salvar logo"}
-                  </Button>
-                  {logoFile && (
-                    <Button variant="ghost" onClick={() => setLogoFile(null)}>
-                      Limpar seleção
-                    </Button>
-                  )}
-                </div>
-                {logoFeedback && (
-                  <div
-                    className={`text-xs flex items-center gap-2 ${
-                      logoFeedback.type === "success" ? "text-emerald-600" : "text-rose-600"
-                    }`}
-                  >
-                    {logoFeedback.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                    {logoFeedback.message}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Criar Rede */}
+            <Card className="border-2 border-emerald-500 hover:border-emerald-600 transition-colors cursor-pointer group bg-emerald-50/50">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-emerald-500 rounded-lg group-hover:bg-emerald-600 transition-colors">
+                        <Plus className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900">Criar Nova Rede</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Crie uma nova rede para organizar suas lojas. Você poderá criar lojas e associar usuários posteriormente.
+                    </p>
                   </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <div className="border-t border-dashed pt-6" />
-
-          <section className="space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <Type className="w-4 h-4 text-emerald-600" />
-                Alterar nome das empresas
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Atualize o nome exibido nas seleções e relatórios. As mudanças são aplicadas imediatamente para todos os usuários.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[240px_1fr]">
-              <div className="space-y-2">
-                <Label>Empresa</Label>
-                <Select value={renameStoreId} onValueChange={setRenameStoreId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a empresa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <Label>Novo nome</Label>
-                  <Input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} placeholder="Digite o novo nome da empresa" />
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleRenameStore} disabled={renaming || renameValue.trim().length < 2}>
-                    {renaming ? "Salvando..." : "Salvar nome"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      const current = stores.find((store) => store.id === renameStoreId);
-                      setRenameValue(current?.name ?? "");
-                    }}
-                    disabled={renaming}
-                  >
-                    Reverter alterações
-                  </Button>
-                </div>
-                {renameFeedback && (
-                  <div
-                    className={`text-xs flex items-center gap-2 ${
-                      renameFeedback.type === "success" ? "text-emerald-600" : "text-rose-600"
-                    }`}
-                  >
-                    {renameFeedback.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                    {renameFeedback.message}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <div className="border-t border-dashed pt-6" />
-
-          <section className="space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2 text-rose-600">
-                <Power className="w-4 h-4" />
-                Desativar empresa
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Ao desativar, a empresa deixa de aparecer na lista ativa e os usuários associados são desligados deste ambiente.
-                Os dados históricos não serão excluídos.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[240px_1fr] items-end">
-              <div className="space-y-2">
-                <Label>Empresa</Label>
-                <Select value={deactivateStoreId} onValueChange={setDeactivateStoreId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a empresa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-3">
-                <Button variant="destructive" onClick={handleDeactivateStore} disabled={deactivating || !deactivateStoreId}>
-                  {deactivating ? "Desativando..." : "Desativar empresa"}
+                <Button
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => router.push("/configuracoes/empresas?view=criar-rede")}
+                >
+                  Criar Rede
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-                {deactivateFeedback && (
-                  <div
-                    className={`text-xs flex items-center gap-2 ${
-                      deactivateFeedback.type === "success" ? "text-emerald-600" : "text-rose-600"
-                    }`}
-                  >
-                    {deactivateFeedback.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                    {deactivateFeedback.message}
+              </CardContent>
+            </Card>
+
+            {/* Alterar Dados */}
+            <Card className="border-2 hover:border-emerald-500 transition-colors cursor-pointer group">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-emerald-100 rounded-lg group-hover:bg-emerald-200 transition-colors">
+                        <Type className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900">Alterar Dados</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Altere o nome das empresas ou a logo das redes. As mudanças são aplicadas imediatamente.
+                    </p>
                   </div>
-                )}
-              </div>
-            </div>
-          </section>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full group-hover:bg-emerald-50 group-hover:border-emerald-500 transition-colors"
+                  onClick={() => router.push("/configuracoes/empresas?view=alterar-dados")}
+                >
+                  Acessar
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Desativar */}
+            <Card className="border-2 hover:border-rose-500 transition-colors cursor-pointer group">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-rose-100 rounded-lg group-hover:bg-rose-200 transition-colors">
+                        <Power className="w-5 h-5 text-rose-600" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900">Desativar Rede ou Loja</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      <strong className="text-rose-600">ATENÇÃO:</strong> Ao desativar uma rede, TODAS as lojas dessa rede serão desativadas automaticamente.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full group-hover:bg-rose-50 group-hover:border-rose-500 transition-colors"
+                  onClick={() => router.push("/configuracoes/empresas?view=desativar")}
+                >
+                  Acessar
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Reativar */}
+            <Card className="border-2 hover:border-emerald-500 transition-colors cursor-pointer group">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-emerald-100 rounded-lg group-hover:bg-emerald-200 transition-colors">
+                        <RotateCcw className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900">Reativar Rede ou Loja</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Reative uma rede ou loja que foi desativada anteriormente. Ela voltará a aparecer na lista de entidades ativas.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full group-hover:bg-emerald-50 group-hover:border-emerald-500 transition-colors"
+                  onClick={() => router.push("/configuracoes/empresas?view=reativar")}
+                >
+                  Acessar
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ConfiguracoesEmpresasContentWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-5xl mx-auto space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+              <div className="grid gap-4 md:grid-cols-2 mt-6">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-32 bg-gray-200 rounded"></div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <ConfiguracoesEmpresasContent />
+    </Suspense>
   );
 }
 
@@ -383,10 +212,9 @@ export default function ConfiguracoesEmpresasPage() {
         "configuracoes-empresas": {
           title: "Configurações · Empresas",
           path: "/configuracoes/empresas",
-          component: <ConfiguracoesEmpresasContent />,
+          component: <ConfiguracoesEmpresasContentWrapper />,
         },
       }}
     />
   );
 }
-

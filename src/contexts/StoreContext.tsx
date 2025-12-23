@@ -16,6 +16,7 @@ type StoreBranding = {
 type NetworkSummary = {
   id: string;
   name: string;
+  logoUrl?: string | null;
 };
 
 type StoreSummary = {
@@ -160,26 +161,37 @@ export function StoreProvider({ children }: StoreProviderProps) {
         // Tentar buscar de networks primeiro, fallback para orgs (compatibilidade)
         const { data: networksData, error: networksError } = await supabase
           .from("networks")
-          .select("id, name")
+          .select("id, name, logo_url")
+          .eq("is_active", true)
           .order("name", { ascending: true });
         
         if (networksError && networksError.code !== "PGRST116") {
           // Se não for erro de tabela não existir, tentar orgs
           const { data: orgsData, error: orgsError } = await supabase
             .from("orgs")
-            .select("id, name")
+            .select("id, name, logo_url")
             .order("name", { ascending: true });
           if (orgsError) throw orgsError;
           networkRows = (orgsData ?? []).map((row) => ({
             id: row.id,
             name: row.name,
+            logoUrl: row.logo_url ?? null,
           }));
         } else if (networksData) {
           networkRows = (networksData ?? []).map((row) => ({
             id: row.id,
             name: row.name,
+            logoUrl: row.logo_url ?? null,
           }));
         }
+
+        // Criar mapas de logo de todas as redes (não apenas as que têm lojas)
+        let networkMap = new Map<string, string>();
+        let networkLogoMap = new Map<string, string | null>();
+        networkRows.forEach((network) => {
+          networkMap.set(network.id, network.name);
+          networkLogoMap.set(network.id, network.logoUrl ?? null);
+        });
 
         const { data: storesData, error: storesError } = await supabase
           .from("stores")
@@ -188,33 +200,6 @@ export function StoreProvider({ children }: StoreProviderProps) {
           )
           .order("name", { ascending: true });
         if (storesError) throw storesError;
-
-        const networkIds = [...new Set((storesData ?? []).map((s) => s.network_id || s.org_id).filter(Boolean))];
-        
-        let networkMap = new Map<string, string>();
-        let networkLogoMap = new Map<string, string | null>();
-        
-        if (networkIds.length > 0) {
-          const { data: networksData } = await supabase
-            .from("networks")
-            .select("id, name, logo_url")
-            .in("id", networkIds);
-          if (networksData) {
-            networkMap = new Map((networksData ?? []).map((n) => [n.id, n.name]));
-            networkLogoMap = new Map((networksData ?? []).map((n) => [n.id, n.logo_url ?? null]));
-          }
-          
-          if (networkMap.size === 0) {
-            const { data: orgsData } = await supabase
-              .from("orgs")
-              .select("id, name, logo_url")
-              .in("id", networkIds);
-            if (orgsData) {
-              networkMap = new Map((orgsData ?? []).map((o) => [o.id, o.name]));
-              networkLogoMap = new Map((orgsData ?? []).map((o) => [o.id, o.logo_url ?? null]));
-            }
-          }
-        }
 
         storeRows = (storesData ?? [])
           .filter((row) => row.is_active ?? true)
@@ -270,6 +255,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
             const { data: networksData } = await supabase
               .from("networks")
               .select("id, name, logo_url")
+              .eq("is_active", true)
               .in("id", networkIds);
             if (networksData) {
               networkMap = new Map((networksData ?? []).map((n) => [n.id, n.name]));
@@ -502,7 +488,9 @@ export function StoreProvider({ children }: StoreProviderProps) {
     if (currentStoreId === "all") {
       const currentNetwork = networks.find((n) => n.id === currentNetworkId);
       if (currentNetworkId && currentNetwork) {
-        // Buscar logo da rede atual (qualquer loja da rede tem a logo da rede)
+        // Usar logo da rede diretamente (não precisa buscar de loja)
+        const networkLogoUrl = currentNetwork.logoUrl ?? null;
+        // Se não houver logo na rede, tentar buscar de uma loja da rede como fallback
         const networkStore = storesForCurrentNetwork.find((s) => (s.networkId || s.companyId) === currentNetworkId);
         return {
           id: "all",
@@ -511,7 +499,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
           networkName: currentNetwork.name,
           companyId: currentNetworkId,
           companyName: currentNetwork.name,
-          logoUrl: networkStore?.logoUrl ?? null, // Logo da rede (agora sempre vem da rede, não da loja)
+          logoUrl: networkLogoUrl ?? networkStore?.logoUrl ?? null,
           storeRole: "admin",
           isActive: true,
         };

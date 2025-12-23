@@ -429,7 +429,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
-  const { loading: storeLoading, stores, currentStore, currentStoreId, setCurrentStoreId, isAdmin } = useStore();
+  const { loading: storeLoading, stores, currentStore, currentStoreId, currentNetworkId, setCurrentStoreId, isAdmin } = useStore();
   const supabase = useMemo(() => supabaseClient(), []);
   const [active, setActive] = useState<string>(initialView);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -515,15 +515,16 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
 
   useEffect(() => {
     const matchEntry = Object.entries(viewRoutes).find(([, path]) => path === pathname);
-    if (matchEntry) {
-      setActive(matchEntry[0]);
-    } else {
-      setActive(initialView);
-    }
+    const newActive = matchEntry ? matchEntry[0] : initialView;
+    
+    // Sempre atualizar o active quando o pathname mudar (incluindo navegação do navegador)
+    setActive(newActive);
   }, [pathname, initialView, viewRoutes]);
 
   useEffect(() => {
+    // Limpar pendingRoute e estado de navegação se chegamos à rota que estava pendente
     if (pendingRoute && pathname === pendingRoute) {
+      setPendingRoute(null);
       completeNavigation();
     }
   }, [pathname, pendingRoute, completeNavigation]);
@@ -915,9 +916,15 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
   const isViewingAllStores = currentStoreId === "all";
   const hasStores = stores.length > 0;
   const hasCurrentStore = currentStore !== null;
+  const hasNetworkSelected = currentNetworkId !== null;
   
-  // Só mostrar erro se não tiver lojas OU se não tiver loja atual E não estiver vendo todas as lojas
-  if (!hasStores || (!hasCurrentStore && !isViewingAllStores)) {
+  // Para admins: permitir acesso se tiver uma rede selecionada (mesmo sem lojas)
+  // Para não-admins: só permitir se tiver lojas OU se tiver loja atual OU estiver vendo todas as lojas
+  const shouldShowError = isAdmin
+    ? !hasNetworkSelected && !hasStores && !hasCurrentStore && !isViewingAllStores
+    : !hasStores || (!hasCurrentStore && !isViewingAllStores);
+  
+  if (shouldShowError) {
     const handleLogout = async () => {
       await signOut();
       router.push("/login");
@@ -999,7 +1006,15 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
                 style={{ borderColor: primaryBorder }}
               >
                 {currentStore?.logoUrl ? (
-                  <Image src={currentStore.logoUrl} alt={storeTitle} width={36} height={36} className="object-cover w-full h-full" />
+                  <Image 
+                    src={currentStore.logoUrl} 
+                    alt={storeTitle} 
+                    width={36} 
+                    height={36} 
+                    className="object-cover w-full h-full"
+                    unoptimized
+                    key={currentStore.logoUrl}
+                  />
                 ) : (
                   <span className="text-xs sm:text-sm font-semibold" style={{ color: primaryColor }}>
                     {storeTitle[0] ?? "?"}
@@ -1082,6 +1097,7 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
               {currentStore?.logoUrl ? (
                 <>
                   <div
+                    key={currentStore.logoUrl}
                     className="absolute inset-0 opacity-[0.75] pointer-events-none select-none"
                     style={{
                       backgroundImage: `url(${currentStore.logoUrl})`,
