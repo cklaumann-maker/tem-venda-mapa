@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,9 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabaseClient } from "@/lib/supabaseClient"
 import Logo from "@/components/common/Logo"
-import { CheckCircle2 } from "lucide-react"
+import { CheckCircle2, Loader2 } from "lucide-react"
 
-export default function LoginForm() {
+function LoginFormContent() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -140,5 +140,29 @@ export default function LoginForm() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function LoginForm() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-6">
+              <Logo width={220} height={88} priority />
+            </div>
+            <CardDescription className="text-base">
+              Carregando...
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <LoginFormContent />
+    </Suspense>
   )
 }
