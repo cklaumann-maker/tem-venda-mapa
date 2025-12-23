@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { CheckCircle2, XCircle, Loader2, Mail } from "lucide-react";
 import Logo from "@/components/common/Logo";
 import { sendPasswordResetEmail } from "@/lib/email";
 
-export default function RecuperarSenhaPage() {
+function RecuperarSenhaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -573,6 +573,31 @@ export default function RecuperarSenhaPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function RecuperarSenhaPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-6">
+              <Logo width={220} height={88} priority />
+            </div>
+            <CardTitle>Carregando...</CardTitle>
+            <CardDescription>
+              Aguarde enquanto carregamos as informações...
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <RecuperarSenhaContent />
+    </Suspense>
   );
 }
 
