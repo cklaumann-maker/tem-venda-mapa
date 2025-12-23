@@ -308,8 +308,8 @@ export default function ZApiView() {
                 <Input 
                   id="instance-id"
                   name="zapi-instance-id"
-                  type="text"
-                  autoComplete="off"
+                  type="password"
+                  autoComplete="new-password"
                   value={instanceId}
                   onChange={(e) => {
                     setInstanceId(e.target.value);
@@ -336,8 +336,8 @@ export default function ZApiView() {
                 <Input 
                   id="token"
                   name="zapi-token"
-                  type="text"
-                  autoComplete="off"
+                  type="password"
+                  autoComplete="new-password"
                   value={token}
                   onChange={(e) => {
                     setToken(e.target.value);
