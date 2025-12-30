@@ -107,18 +107,11 @@ export function StoreProvider({ children }: StoreProviderProps) {
       let role = profile?.role ?? null;
       setProfileRole(role);
 
-      console.log("📋 Perfil do usuário:", {
-        userId: user.id,
-        userEmail: user.email,
-        role,
-        defaultStoreId: profile?.default_store_id,
-        orgId: profile?.org_id,
-        networkId: profile?.network_id,
-      });
+      // Log removido para evitar exposição de dados sensíveis
 
       // Se o usuário não tem role, criar perfil com role padrão
       if (!role) {
-        console.warn("⚠️ Usuário sem role definido. Criando perfil com role 'seller' por padrão.");
+        // Log de warning removido - não crítico para segurança
         // Tentar criar/atualizar perfil com role padrão
         const { error: updateError } = await supabase
           .from("profiles")
@@ -131,7 +124,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
           });
         
         if (updateError) {
-          console.error("❌ Erro ao atualizar perfil:", updateError);
+          // Erro logado internamente pelo Supabase, não precisa logar novamente
           throw new Error("Usuário sem perfil configurado. Entre em contato com o administrador.");
         }
         
@@ -159,22 +152,17 @@ export function StoreProvider({ children }: StoreProviderProps) {
       if (role === "admin") {
         // Admin vê todas as redes e lojas
         // Tentar buscar de networks primeiro, fallback para orgs (compatibilidade)
-        console.log("🔍 Admin: Iniciando busca de redes...");
+        // Log de debug removido
         const { data: networksData, error: networksError } = await supabase
           .from("networks")
           .select("id, name, logo_url")
           .eq("is_active", true)
           .order("name", { ascending: true });
         
-        console.log("🔍 Admin: Resultado da busca de redes:", {
-          hasError: !!networksError,
-          error: networksError,
-          dataLength: networksData?.length ?? 0,
-          data: networksData
-        });
+        // Log de debug removido para evitar exposição de dados
         
         if (networksError) {
-          console.error("❌ Erro ao buscar redes:", networksError);
+          // Erro será tratado abaixo
           if (networksError.code !== "PGRST116") {
             // Se não for erro de tabela não existir, tentar orgs
             const { data: orgsData, error: orgsError } = await supabase
@@ -190,7 +178,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
               name: row.name,
               logoUrl: row.logo_url ?? null,
             }));
-            console.log("📋 Redes carregadas de orgs (fallback):", networkRows.length);
+            // Log de debug removido
           } else {
             // Tabela networks não existe, tentar orgs
             const { data: orgsData, error: orgsError } = await supabase
@@ -206,7 +194,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
               name: row.name,
               logoUrl: row.logo_url ?? null,
             }));
-            console.log("📋 Redes carregadas de orgs (tabela não existe):", networkRows.length);
+            // Log de debug removido
           }
         } else {
           // Sem erro, usar os dados retornados (pode ser array vazio)
@@ -215,7 +203,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
             name: row.name,
             logoUrl: row.logo_url ?? null,
           }));
-          console.log("📋 Redes carregadas para admin:", networkRows.length, networkRows);
+          // Log de debug removido para evitar exposição de dados
         }
 
         // Criar mapas de logo de todas as redes (não apenas as que têm lojas)
@@ -377,12 +365,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
         }
       }
 
-      console.log("📊 Dados carregados:", {
-        networksCount: networkRows.length,
-        storesCount: storeRows.length,
-        networkNames: networkRows.map(n => n.name),
-        storeNames: storeRows.map(s => s.name),
-      });
+      // Log de debug removido para evitar exposição de dados
 
       setNetworks(networkRows);
       setStores(storeRows);
@@ -397,7 +380,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
       } else {
         preferredNetworkId = userNetworkId ?? networkRows[0]?.id ?? null;
       }
-      console.log("🔗 Rede selecionada:", preferredNetworkId);
+      // Log de debug removido
       setCurrentNetworkIdState(preferredNetworkId);
 
       // Filtrar lojas pela rede selecionada
@@ -429,8 +412,8 @@ export function StoreProvider({ children }: StoreProviderProps) {
       const isManager = role === "manager" || role === "owner";
       setViewModeState(isManager ? "store" : "store");
     } catch (error) {
-      console.error("❌ Erro ao carregar contexto de lojas:", error);
-      console.error("❌ Detalhes do erro:", JSON.stringify(error, null, 2));
+      // Erro será tratado pelo componente que usa o contexto
+      // Não logar aqui para evitar exposição de dados sensíveis
       setNetworks([]);
       setStores([]);
       setCurrentNetworkIdState(null);
@@ -498,7 +481,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
         .update({ default_store_id: id })
         .eq("id", user.id);
     } catch (error) {
-      console.error("Erro ao atualizar loja padrão:", error);
+      // Erro será tratado silenciosamente - não crítico
       await loadData();
     }
   };
@@ -583,14 +566,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
     getStoreIdsForQuery,
   };
   
-  console.log("🔍 StoreContext value:", {
-    networksCount: networks.length,
-    companiesCount: networks.length,
-    storesCount: allStoresForSelector.length,
-    currentNetworkId,
-    currentStoreId,
-    isAdmin: profileRole === "admin",
-  });
+  // Log de debug removido para evitar exposição de dados
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

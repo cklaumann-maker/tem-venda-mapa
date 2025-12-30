@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseClient } from '@/lib/supabaseClient';
+import { safeLogger } from '@/lib/safeLogger';
 
 /**
  * API Route para envio de email de recuperação de senha
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      console.error('Erro ao enviar email de recuperação:', error);
+      safeLogger.error('Erro ao enviar email de recuperação:', error);
       return NextResponse.json(
         { error: error.message },
         { status: 400 }
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Erro ao enviar email de recuperação:', error);
+    safeLogger.error('Erro ao enviar email de recuperação:', error);
     return NextResponse.json(
       { error: 'Erro ao enviar email' },
       { status: 500 }

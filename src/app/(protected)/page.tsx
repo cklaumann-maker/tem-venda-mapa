@@ -916,11 +916,15 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
   const hasStores = stores.length > 0;
   const hasCurrentStore = currentStore !== null;
   const hasNetworkSelected = currentNetworkId !== null;
+  const isConfigPage = pathname.startsWith("/configuracoes");
+  const isHomePage = pathname === "/";
   
   // Para admins: sempre permitir acesso (têm acesso global, não precisam de rede/loja vinculada)
-  // Para não-admins: só permitir se tiver lojas OU se tiver loja atual OU estiver vendo todas as lojas
-  const shouldShowError = isAdmin
-    ? false // Admins sempre têm acesso, mesmo sem rede/loja vinculada
+  // Para página de configurações: sempre permitir acesso (para criar redes/lojas)
+  // Para página inicial: também permitir acesso mesmo sem lojas (usuário pode navegar para configurações)
+  // Para outras páginas: só permitir se tiver lojas OU se tiver loja atual OU estiver vendo todas as lojas
+  const shouldShowError = isAdmin || isConfigPage || isHomePage
+    ? false // Admins, página de configurações e página inicial sempre têm acesso
     : !hasStores || (!hasCurrentStore && !isViewingAllStores);
   
   if (shouldShowError) {

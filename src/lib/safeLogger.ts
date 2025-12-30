@@ -15,6 +15,11 @@ const SENSITIVE_FIELDS = [
   'cvv',
   'service_role_key',
   'supabase_service_role_key',
+  // Dados pessoais sensíveis (LGPD)
+  'cpf',
+  'cnpj',
+  'document',
+  'document_number',
 ];
 
 function sanitizeObject(obj: any, depth = 0): any {

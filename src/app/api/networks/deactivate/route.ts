@@ -75,10 +75,10 @@ export async function POST(req: NextRequest) {
 
     if (rpcError) {
       safeLogger.error("Erro ao desativar rede via RPC:", rpcError);
-      console.error("=== ERRO RPC ===");
-      console.error("Mensagem:", rpcError?.message);
-      console.error("Código:", rpcError?.code);
-      console.error("Detalhes:", JSON.stringify(rpcError, null, 2));
+      safeLogger.error("Erro ao executar RPC de desativação de rede:", {
+        message: rpcError?.message,
+        code: rpcError?.code,
+      });
       
       // Fallback: desativar manualmente se a função SQL falhar
       try {
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
           .select();
         
         if (networkError) {
-          console.error("Erro ao desativar rede:", networkError);
+          safeLogger.error("Erro ao desativar rede:", networkError);
           throw networkError;
         }
         console.log("Rede desativada com sucesso:", networkUpdateData);
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
           .or(`network_id.eq.${networkId},org_id.eq.${networkId}`);
         
         if (storesSelectError) {
-          console.error("Erro ao buscar lojas:", storesSelectError);
+          safeLogger.error("Erro ao buscar lojas:", storesSelectError);
           throw storesSelectError;
         }
         
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
             .in('id', storeIds);
           
           if (storesError) {
-            console.error("Erro ao desativar lojas:", storesError);
+            safeLogger.error("Erro ao desativar lojas:", storesError);
             throw storesError;
           }
           console.log("Lojas desativadas com sucesso");
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
             .in('store_id', storeIds);
           
           if (membersError) {
-            console.error("Erro ao desativar membros (não crítico):", membersError);
+            safeLogger.error("Erro ao desativar membros (não crítico):", membersError);
             safeLogger.error("Erro ao desativar membros (não crítico):", membersError);
           } else {
             console.log("Membros desativados com sucesso");
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
           affectedCount = count || 0;
           console.log(`Encontrados ${affectedCount} usuários para desativar`);
         } catch (countError) {
-          console.error("Erro ao contar usuários (não crítico):", countError);
+          safeLogger.error("Erro ao contar usuários (não crítico):", countError);
         }
         
         // Desativar usuários da rede (se necessário)
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
           .is('deleted_at', null);
         
         if (profilesError) {
-          console.error("Erro ao desativar perfis (não crítico):", profilesError);
+          safeLogger.error("Erro ao desativar perfis (não crítico):", profilesError);
           safeLogger.error("Erro ao desativar perfis (não crítico):", profilesError);
         } else {
           console.log(`Usuários desativados com sucesso`);
@@ -215,10 +215,10 @@ export async function POST(req: NextRequest) {
           warning: "Função SQL falhou, desativação realizada manualmente"
         });
       } catch (fallbackError: any) {
-        console.error("=== ERRO NO FALLBACK ===");
-        console.error("Mensagem:", fallbackError?.message);
-        console.error("Stack:", fallbackError?.stack);
-        console.error("Erro completo:", JSON.stringify(fallbackError, null, 2));
+        safeLogger.error("Erro no fallback manual de desativação:", {
+          message: fallbackError?.message,
+          stack: process.env.NODE_ENV === 'development' ? fallbackError?.stack : undefined,
+        });
         safeLogger.error("Erro no fallback de desativação:", fallbackError);
         
         return NextResponse.json(
@@ -244,10 +244,11 @@ export async function POST(req: NextRequest) {
     const errorMessage = error?.message || 'Erro desconhecido';
     
     safeLogger.error("Erro inesperado ao desativar rede:", error);
-    console.error("=== ERRO INESPERADO ===");
-    console.error("Mensagem:", errorMessage);
-    console.error("Stack:", error?.stack);
-    console.error("Tipo:", typeof error);
+    safeLogger.error("Erro inesperado ao desativar rede:", {
+      message: errorMessage,
+      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+      type: typeof error,
+    });
     
     // Sempre retornar uma resposta válida
     try {
@@ -260,7 +261,7 @@ export async function POST(req: NextRequest) {
       );
     } catch (jsonError: any) {
       // Se até o NextResponse.json falhar, usar Response direto
-      console.error("Erro ao criar NextResponse:", jsonError);
+      safeLogger.error("Erro ao criar NextResponse:", jsonError);
       return new Response(
         JSON.stringify({ 
           error: "Erro interno do servidor",

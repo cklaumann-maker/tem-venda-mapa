@@ -57,7 +57,15 @@ Este documento especifica o processo de criação de **Lojas** para **Redes Exis
 - ❌ `city` (TEXT, obrigatório) - **FALTANDO**
 - ❌ `phone` (TEXT, obrigatório) - **FALTANDO**
 - ❌ `email` (TEXT, obrigatório) - **FALTANDO**
-- ❌ Campos opcionais (description, internal_code, manager_name, state_registration, street, street_number, address_complement, neighborhood, latitude, longitude, secondary_phone, whatsapp, secondary_email, opened_at, operational_status, area_sqm, employee_count, cash_register_count, business_hours, max_customer_capacity, monthly_revenue_target, estimated_average_ticket, daily_customer_target, pos_code, payment_settings, tags, internal_notes, photos) - **FALTANDO**
+- ❌ Campos opcionais (internal_code, manager_name, trade_name, state_registration, municipal_registration, street, street_number, address_complement, neighborhood, latitude, longitude, secondary_phone, secondary_email, opened_at, operational_status, area_sqm, employee_count, cash_register_count, business_hours, max_customer_capacity, monthly_revenue_target, estimated_average_ticket, daily_customer_target, pos_code, payment_settings, tags, internal_notes, photos) - **FALTANDO**
+
+**NOTA IMPORTANTE sobre campos de endereço:**
+- ✅ `street` (Logradouro) - **OBRIGATÓRIO** (já existe no banco)
+- ✅ `street_number` (Número) - **OBRIGATÓRIO** (já existe no banco)
+- ✅ `neighborhood` (Bairro) - **OBRIGATÓRIO** (já existe no banco)
+- ✅ `address_complement` (Complemento) - **OPCIONAL** (já existe no banco)
+- ✅ `trade_name` (Nome Fantasia) - **CRIADO VIA MIGRATION**
+- ✅ `municipal_registration` (Inscrição Municipal) - **CRIADO VIA MIGRATION**
 
 **Para `networks` (se necessário para herança de dados):**
 - ❌ Campos opcionais da rede (primary_email, primary_phone, zip_code, state, city, trade_name, cnpj, company_name, etc.) - **FALTANDO** - Consultar `ESPECIFICACAO_CAMPOS_REDES_LOJAS.md` para lista completa
@@ -111,17 +119,17 @@ Campos mínimos necessários para criar uma loja válida no sistema.
 | `phone` | TEXT | Telefone da loja | Telefone válido |
 | `email` | TEXT | E-mail da loja | E-mail válido |
 
-**Total: 9 campos obrigatórios**
+**Total: 12 campos obrigatórios** (incluindo: name, cnpj, company_name, zip_code, state, city, phone, email, street, street_number, neighborhood)
 
-**Nota Importante**: Diferentemente das redes, **todas as lojas devem ter CNPJ e razão social**, pois cada loja é uma entidade jurídica independente (mesmo que pertençam à mesma rede).
+**Nota Importante**: Diferentemente das redes, **todas as lojas devem ter CNPJ e razão social**, pois cada loja é uma entidade jurídica independente (mesmo que pertençam à mesma rede). Além disso, os campos de endereço (logradouro, número e bairro) são obrigatórios, exceto o complemento.
 
 ### Campos Opcionais
 
 Para consulta completa dos campos opcionais, referir-se a `ESPECIFICACAO_CAMPOS_REDES_LOJAS.md` seção "## 📊 LOJAS → Campos Opcionais". Os campos opcionais incluem:
 
-- **Dados Básicos**: `logo_url`, `description`, `internal_code`, `manager_name`, `state_registration`
+- **Dados Básicos**: `logo_url`, `internal_code`, `manager_name`, `trade_name`, `state_registration`, `municipal_registration`
 - **Endereço Completo**: `street`, `street_number`, `address_complement`, `neighborhood`, `latitude`, `longitude`
-- **Contatos**: `secondary_phone`, `whatsapp`, `secondary_email`
+- **Contatos**: `secondary_phone`, `secondary_email`
 - **Operacionais**: `opened_at`, `operational_status`, `area_sqm`, `employee_count`, `cash_register_count`, `business_hours`, `max_customer_capacity`
 - **Métricas de Performance**: `monthly_revenue_target`, `estimated_average_ticket`, `daily_customer_target`
 - **Financeiro**: `pos_code`, `payment_settings`
@@ -178,7 +186,7 @@ Para consultar os tooltips específicos de cada campo, referir-se ao documento p
 
 - **Dados Básicos**: Logo, descrição, código interno, gerente, inscrição estadual
 - **Endereço Completo**: Logradouro, número, complemento, bairro, coordenadas
-- **Contatos**: Telefone secundário, WhatsApp, e-mail secundário
+- **Contatos**: Telefone secundário, e-mail secundário
 - **Operacionais**: Data de abertura, status operacional, área, funcionários, caixas, horários, capacidade
 - **Métricas**: Meta de faturamento, ticket médio, meta de clientes
 - **Financeiro**: Código PDV, configurações de pagamento
@@ -472,7 +480,7 @@ Indicador visual mostra que foi herdado da rede.
 
 Campos copiados (você pode editar):
    - Endereço (rua, número, bairro, etc.)
-   - Telefone secundário, WhatsApp
+   - Telefone secundário
    - Configurações operacionais
    - Métricas e metas
 ```

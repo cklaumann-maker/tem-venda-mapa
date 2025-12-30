@@ -3,6 +3,8 @@
  * Registra tentativas suspeitas de acesso
  */
 
+import { safeLogger } from './safeLogger';
+
 interface SecurityEvent {
   type: 'rate_limit_hit' | 'unauthorized_access' | 'invalid_token' | 'admin_operation';
   ip: string;
@@ -27,9 +29,9 @@ export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp'>) {
   // Em produção, enviar para serviço de logging
   if (process.env.NODE_ENV === 'production') {
     // Exemplo: enviar para Sentry, LogRocket, ou banco de dados
-    console.log('[SECURITY EVENT]', JSON.stringify(fullEvent));
+    safeLogger.log('[SECURITY EVENT]', fullEvent);
   } else {
-    console.warn('[SECURITY EVENT]', fullEvent);
+    safeLogger.warn('[SECURITY EVENT]', fullEvent);
   }
 
   // Limpar eventos antigos (manter apenas últimas 1000)

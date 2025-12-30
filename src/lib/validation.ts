@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Schemas de validação
 export const emailSchema = z.string().email().max(255);
 export const passwordSchema = z.string().min(8).max(128).regex(
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&\-_])[A-Za-z\d@$!%*?&\-_]/,
   'Senha deve conter: minúscula, maiúscula, número e símbolo'
 );
 
@@ -82,6 +82,54 @@ export const cnpjOptionalSchema = z.string()
       return validateCNPJ(cnpj);
     },
     { message: "CNPJ inválido. Verifique os dígitos verificadores." }
+  );
+
+/**
+ * Valida CPF (11 dígitos com dígitos verificadores)
+ * Remove formatação e valida formato e dígitos verificadores
+ */
+function validateCPF(cpf: string): boolean {
+  // Remove formatação (pontos, hífens)
+  const cleanCPF = cpf.replace(/[^\d]/g, '');
+  
+  // Deve ter exatamente 11 dígitos
+  if (cleanCPF.length !== 11) return false;
+  
+  // Verifica se todos os dígitos são iguais (CPF inválido)
+  if (/^(\d)\1+$/.test(cleanCPF)) return false;
+  
+  // Valida dígitos verificadores
+  let sum = 0;
+  let remainder;
+  
+  // Valida primeiro dígito verificador
+  for (let i = 1; i <= 9; i++) {
+    sum += parseInt(cleanCPF.substring(i - 1, i)) * (11 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF.substring(9, 10))) return false;
+  
+  // Valida segundo dígito verificador
+  sum = 0;
+  for (let i = 1; i <= 10; i++) {
+    sum += parseInt(cleanCPF.substring(i - 1, i)) * (12 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF.substring(10, 11))) return false;
+  
+  return true;
+}
+
+/**
+ * Schema Zod para CPF (obrigatório)
+ */
+export const cpfSchema = z.string()
+  .min(1, "CPF é obrigatório")
+  .refine(
+    (cpf) => validateCPF(cpf),
+    { message: "CPF inválido. Verifique os dígitos verificadores." }
   );
 
 /**
@@ -195,11 +243,36 @@ export const getEmailsSchema = z.object({
 // ============================================
 
 /**
- * Schema para criação de rede
- * Conforme ESPECIFICACAO_CAMPOS_REDES_LOJAS.md
+ * Schema para dados do proprietário da rede
+ * Conforme ANALISE_PROPRietARIO_REDE.md
+ */
+export const ownerDataSchema = z.object({
+  // Campos obrigatórios
+  full_name: z.string().min(2, "Nome completo deve ter no mínimo 2 caracteres").max(255, "Nome completo deve ter no máximo 255 caracteres").trim(),
+  email: emailSchema,
+  phone: brazilianPhoneSchema,
+  cpf: cpfSchema,
+  password: passwordSchema,
+  password_confirm: z.string(),
+  // Campos opcionais
+  birth_date: z.string().date().optional(),
+  secondary_email: z.union([emailSchema, z.literal('')]).optional().transform((val) => val === '' ? undefined : val),
+  secondary_phone: z.string().max(20).trim().optional(),
+  photo_url: z.string().url().optional(),
+}).refine((data) => data.password === data.password_confirm, {
+  message: "As senhas não coincidem",
+  path: ["password_confirm"],
+});
+
+/**
+ * Schema para criação de rede (incluindo proprietário)
+ * Conforme ESPECIFICACAO_CAMPOS_REDES_LOJAS.md e ANALISE_PROPRietARIO_REDE.md
  */
 export const createNetworkSchema = z.object({
-  // Campos obrigatórios
+  // Dados do proprietário (obrigatório)
+  owner: ownerDataSchema,
+  
+  // Campos obrigatórios da rede
   name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(255, "Nome deve ter no máximo 255 caracteres").trim(),
   primary_email: emailSchema,
   primary_phone: brazilianPhoneSchema,
@@ -220,15 +293,13 @@ export const createNetworkSchema = z.object({
   state_registration: z.string().max(50).trim().optional(),
   municipal_registration: z.string().max(50).trim().optional(),
   website: z.string().url().optional(),
-  description: z.string().max(1000).trim().optional(),
   
   // Endereço Completo - Complemento (opcional)
   address_complement: z.string().max(100).trim().optional(),
   
   // Contatos Adicionais
   secondary_phone: z.string().max(20).trim().optional(),
-  secondary_email: emailSchema.optional(),
-  whatsapp: z.string().max(20).trim().optional(),
+  secondary_email: z.union([emailSchema, z.literal('')]).optional().transform((val) => val === '' ? undefined : val),
   
   // Métricas Operacionais
   founded_at: z.string().date().optional(),
@@ -282,7 +353,6 @@ export const createStoreSchema = z.object({
   
   // Campos opcionais (pode ser expandido conforme necessário)
   logo_url: z.string().url().optional(),
-  description: z.string().max(1000).trim().optional(),
   internal_code: z.string().max(50).trim().optional(),
   manager_name: z.string().max(255).trim().optional(),
   state_registration: z.string().max(50).trim().optional(),
@@ -297,7 +367,6 @@ export const createStoreSchema = z.object({
   
   // Contatos
   secondary_phone: brazilianPhoneSchema.optional(),
-  whatsapp: z.string().regex(/^55\d{10,11}$/, "WhatsApp deve estar no formato: 5511999999999").optional(),
   secondary_email: emailSchema.optional(),
   
   // Operacionais

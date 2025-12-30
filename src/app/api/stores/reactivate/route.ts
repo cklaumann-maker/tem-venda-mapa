@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     } catch (jsonError: any) {
-      console.error("Erro ao criar NextResponse:", jsonError);
+      safeLogger.error("Erro ao criar NextResponse:", jsonError);
       return new Response(
         JSON.stringify({ 
           error: "Erro interno do servidor",

@@ -97,3 +97,15 @@ export const strictRateLimit = rateLimit({
   maxRequests: 10, // 10 requisições por minuto
 });
 
+// Rate limiting específico para criação de senha/proprietário (mais restritivo)
+export const passwordCreationRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  maxRequests: 3, // Máximo 3 tentativas por 15 minutos
+  identifier: (req) => {
+    // Identificar por IP
+    return req.headers.get('x-forwarded-for') || 
+           req.headers.get('x-real-ip') || 
+           'unknown';
+  },
+});
+

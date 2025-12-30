@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const user = currentUser;
 
     // Parse do body
-    let body: { network_data?: any; store_data?: any; current_step?: number };
+    let body: { owner_data?: any; network_data?: any; store_data?: any; current_step?: number };
     try {
       body = await req.json();
     } catch (parseError: any) {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { network_data = {}, store_data = {}, current_step = 1 } = body;
+    const { owner_data = {}, network_data = {}, store_data = {}, current_step = 0 } = body;
 
     // Verificar se já existe um rascunho para este usuário
     const { data: existingDraft, error: fetchError } = await supabaseAdmin
@@ -58,10 +58,17 @@ export async function POST(req: NextRequest) {
       user_id: user.id,
       network_data: network_data || {},
       store_data: store_data || {},
-      current_step: current_step || 1,
+      current_step: current_step || 0,
       updated_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 dias
     };
+
+    // SEGURANÇA: Incluir owner_data no network_data, mas SEM senhas
+    // Senhas NUNCA devem ser armazenadas em drafts (localStorage ou banco de dados)
+    if (owner_data && Object.keys(owner_data).length > 0) {
+      const { password, password_confirm, ...ownerDataWithoutPassword } = owner_data;
+      draftData.network_data = { ...draftData.network_data, _owner_data: ownerDataWithoutPassword };
+    }
 
     const { data: draft, error: upsertError } = existingDraft
       ? await supabaseAdmin

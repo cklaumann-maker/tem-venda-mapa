@@ -77,7 +77,6 @@ Campos que enriquecem o cadastro mas não são essenciais para criação.
 | `state_registration` | TEXT | Inscrição estadual | Se aplicável |
 | `municipal_registration` | TEXT | Inscrição municipal | Se aplicável |
 | `website` | TEXT | Site da rede | URL válida |
-| `description` | TEXT | Descrição da rede | Texto livre |
 
 **Nota Importante**: Redes podem não ter CNPJ quando o proprietário é pessoa física ou quando cada loja tem seu próprio CNPJ. Porém, **todas as lojas devem ter CNPJ e razão social obrigatoriamente**.
 
@@ -91,7 +90,6 @@ Campos que enriquecem o cadastro mas não são essenciais para criação.
 |-------|------|-----------|
 | `secondary_phone` | TEXT | Telefone secundário |
 | `secondary_email` | TEXT | E-mail secundário |
-| `whatsapp` | TEXT | Número WhatsApp (formato: 5511999999999) |
 
 #### Métricas Operacionais
 | Campo | Tipo | Descrição | Observações |
@@ -150,7 +148,7 @@ Campos mínimos necessários para criar uma loja válida no sistema.
 | `phone` | TEXT | Telefone da loja | Telefone válido |
 | `email` | TEXT | E-mail da loja | E-mail válido |
 
-**Total: 9 campos obrigatórios**
+**Total: 12 campos obrigatórios** (incluindo: name, cnpj, company_name, zip_code, state, city, phone, email, street, street_number, neighborhood)
 
 **Nota Importante**: Diferentemente das redes, **todas as lojas devem ter CNPJ e razão social**, pois cada loja é uma entidade jurídica independente (mesmo que pertençam à mesma rede).
 
@@ -160,18 +158,19 @@ Campos mínimos necessários para criar uma loja válida no sistema.
 | Campo | Tipo | Descrição | Observações |
 |-------|------|-----------|-------------|
 | `logo_url` | TEXT | URL do logo da loja | JÁ EXISTE |
-| `description` | TEXT | Descrição da loja | Texto livre |
 | `internal_code` | TEXT | Código interno (para sistemas legados) | Único por rede |
 | `manager_name` | TEXT | Nome do gerente da loja | |
+| `trade_name` | TEXT | Nome fantasia da loja | |
 | `state_registration` | TEXT | Inscrição estadual | Se aplicável |
+| `municipal_registration` | TEXT | Inscrição municipal | Se aplicável |
 
 #### Endereço Completo
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `street` | TEXT | Logradouro |
-| `street_number` | TEXT | Número |
-| `address_complement` | TEXT | Complemento |
-| `neighborhood` | TEXT | Bairro |
+| Campo | Tipo | Descrição | Obrigatório |
+|-------|------|-----------|-------------|
+| `street` | TEXT | Logradouro | Sim |
+| `street_number` | TEXT | Número | Sim |
+| `address_complement` | TEXT | Complemento | Não |
+| `neighborhood` | TEXT | Bairro | Sim |
 | `latitude` | DECIMAL(10,8) | Latitude para mapas |
 | `longitude` | DECIMAL(11,8) | Longitude para mapas |
 
@@ -179,7 +178,6 @@ Campos mínimos necessários para criar uma loja válida no sistema.
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | `secondary_phone` | TEXT | Telefone secundário |
-| `whatsapp` | TEXT | WhatsApp (formato: 5511999999999) |
 | `secondary_email` | TEXT | E-mail secundário |
 
 #### Operacionais
@@ -286,10 +284,6 @@ Cada entrada segue este formato:
 - **Tooltip**: "Site da sua rede. Pode ser usado em relatórios e comunicações com clientes."
 - **Motivação**: "Adicione para que clientes e parceiros possam encontrar mais informações sobre sua rede."
 
-**`description` (Descrição)**
-- **Tooltip**: "Descreva sua rede, segmento e diferencial. Ajuda na identificação e organização."
-- **Motivação**: "Descreva sua rede para facilitar a identificação e organização, especialmente se você gerencia múltiplas redes."
-
 #### Endereço Completo
 
 **`address_complement` (Complemento)**
@@ -305,10 +299,6 @@ Cada entrada segue este formato:
 **`secondary_email` (E-mail Secundário)**
 - **Tooltip**: "E-mail alternativo. Útil para receber relatórios importantes e notificações críticas."
 - **Motivação**: "Configure um e-mail alternativo para receber relatórios e alertas importantes."
-
-**`whatsapp` (WhatsApp)**
-- **Tooltip**: "Número WhatsApp da rede. Facilita comunicação rápida com clientes e equipe."
-- **Motivação**: "Adicione para comunicação rápida via WhatsApp com clientes e equipe."
 
 #### Métricas Operacionais
 
@@ -376,10 +366,6 @@ Cada entrada segue este formato:
 
 #### Dados Básicos
 
-**`description` (Descrição)**
-- **Tooltip**: "Descreva características únicas da loja. Ajuda a diferenciar lojas similares na mesma rede."
-- **Motivação**: "Descreva o que torna esta loja especial para facilitar a identificação e gestão."
-
 **`internal_code` (Código Interno)**
 - **Tooltip**: "Código interno da loja. Útil se você já usa códigos para identificar suas lojas em outros sistemas."
 - **Motivação**: "Adicione se você já possui um código para esta loja em outros sistemas, facilitando a integração."
@@ -388,9 +374,17 @@ Cada entrada segue este formato:
 - **Tooltip**: "Nome do gerente da loja. Facilita a identificação de responsáveis e comunicação direta."
 - **Motivação**: "Informe para facilitar a comunicação direta e identificação de responsáveis pela loja."
 
+**`trade_name` (Nome Fantasia)**
+- **Tooltip**: "Nome comercial diferente da razão social. Ajuda a identificar sua loja nas análises e relatórios."
+- **Motivação**: "Use se sua loja usa um nome comercial conhecido pelos clientes, diferente da razão social."
+
 **`state_registration` (Inscrição Estadual)**
 - **Tooltip**: "Inscrição estadual da loja. Necessária para relatórios fiscais e documentos oficiais."
 - **Motivação**: "Preencha para facilitar a emissão de relatórios fiscais e documentos oficiais desta loja."
+
+**`municipal_registration` (Inscrição Municipal)**
+- **Tooltip**: "Inscrição municipal da loja. Necessária para algumas operações e relatórios municipais."
+- **Motivação**: "Preencha se sua loja possui inscrição municipal, facilitando relatórios e operações locais."
 
 #### Endereço Completo
 
@@ -419,10 +413,6 @@ Cada entrada segue este formato:
 **`secondary_phone` (Telefone Secundário)**
 - **Tooltip**: "Telefone alternativo da loja. Garante que clientes sempre consigam entrar em contato."
 - **Motivação**: "Adicione um telefone alternativo para garantir que clientes sempre consigam falar com a loja."
-
-**`whatsapp` (WhatsApp)**
-- **Tooltip**: "WhatsApp da loja. Facilita comunicação rápida com clientes e pedidos via WhatsApp."
-- **Motivação**: "Adicione para receber pedidos e atender clientes rapidamente via WhatsApp."
 
 **`secondary_email` (E-mail Secundário)**
 - **Tooltip**: "E-mail alternativo da loja. Útil para receber notificações importantes e relatórios."
@@ -1269,7 +1259,7 @@ function calculateLevenshteinSimilarity(str1: string, str2: string): number {
 **Etapa 3: Contatos da Rede**
 - E-mail principal ✅ (obrigatório)
 - Telefone principal ✅ (obrigatório)
-- Opcional: WhatsApp, e-mail secundário, telefone secundário
+- Opcional: e-mail secundário, telefone secundário
 
 **Etapa 4: Dados Opcionais da Rede**
 - CNPJ, Razão Social (se houver)

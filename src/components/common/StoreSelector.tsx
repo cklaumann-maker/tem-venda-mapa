@@ -36,9 +36,6 @@ export function StoreSelector() {
   const currentCompany = companies.find((c) => c.id === currentCompanyId);
   const currentStore = storesForCurrentNetwork.find((s) => s.id === currentStoreId);
 
-  // Debug: log para verificar dados
-  console.log("🔍 StoreSelector - companies:", companies.length, "isAdmin:", isAdmin, "currentCompanyId:", currentCompanyId, "stores:", stores.length, "storesForNetwork:", storesForCurrentNetwork.length);
-
   // Para admins, sempre mostrar os seletores (mesmo sem redes/lojas)
   // Para outros, mostrar apenas se houver empresas
   if (companies.length === 0 && !isAdmin) {

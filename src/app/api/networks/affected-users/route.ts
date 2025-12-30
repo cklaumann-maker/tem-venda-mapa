@@ -148,11 +148,11 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     const errorMessage = error?.message || 'Erro desconhecido';
     
-    safeLogger.error("Erro inesperado ao obter usuários afetados:", error);
-    console.error("=== ERRO COMPLETO ===");
-    console.error("Mensagem:", errorMessage);
-    console.error("Stack:", error?.stack);
-    console.error("Tipo:", typeof error);
+    safeLogger.error("Erro inesperado ao obter usuários afetados:", {
+      message: errorMessage,
+      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+      type: typeof error,
+    });
     
     // Sempre tentar retornar pelo menos uma resposta válida
     try {

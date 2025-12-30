@@ -5,6 +5,7 @@
 
 import { getPasswordResetEmailTemplate } from './email-templates/password-reset';
 import { getUserInviteEmailTemplate } from './email-templates/user-invite';
+import { safeLogger } from './safeLogger';
 
 interface InviteEmailData {
   email: string;
@@ -20,14 +21,16 @@ interface PasswordResetEmailData {
   token: string;
 }
 
+import { safeLogger } from './safeLogger';
+
 /**
  * Envia email de convite para novo usuário
  */
 export async function sendInviteEmail(data: InviteEmailData): Promise<boolean> {
   try {
-    console.log('📧 [sendInviteEmail] Iniciando envio de email...');
-    console.log('📧 [sendInviteEmail] Email destino:', data.email);
-    console.log('📧 [sendInviteEmail] Token:', data.token.substring(0, 10) + '...');
+    safeLogger.log('📧 [sendInviteEmail] Iniciando envio de email');
+    safeLogger.log('📧 [sendInviteEmail] Email destino:', data.email);
+    // Token não deve ser logado (dados sensíveis)
     
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
     // Codificar o token na URL para evitar problemas com caracteres especiais
@@ -36,9 +39,8 @@ export async function sendInviteEmail(data: InviteEmailData): Promise<boolean> {
     // pois o token já é alfanumérico e seguro para URLs
     const activationUrl = `${baseUrl}/ativar-conta?token=${data.token}`;
 
-    console.log('📧 [sendInviteEmail] URL de ativação:', activationUrl);
-    console.log('📧 [sendInviteEmail] Token original:', data.token);
-    console.log('📧 [sendInviteEmail] Token length:', data.token.length);
+    safeLogger.log('📧 [sendInviteEmail] URL de ativação gerada');
+    // Token não deve ser logado (dados sensíveis)
 
     const emailSubject = `Você foi convidado para ${data.companyName}`;
     const emailBody = getUserInviteEmailTemplate({
@@ -50,7 +52,7 @@ export async function sendInviteEmail(data: InviteEmailData): Promise<boolean> {
       userEmail: data.email,
     });
 
-    console.log('📧 [sendInviteEmail] Chamando API /api/email/send-invite...');
+    safeLogger.log('📧 [sendInviteEmail] Chamando API /api/email/send-invite');
 
     // Chama API route para envio de email
     const response = await fetch('/api/email/send-invite', {
@@ -66,35 +68,35 @@ export async function sendInviteEmail(data: InviteEmailData): Promise<boolean> {
       }),
     });
 
-    console.log('📧 [sendInviteEmail] Resposta recebida. Status:', response.status);
+    safeLogger.log('📧 [sendInviteEmail] Resposta recebida. Status:', response.status);
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('❌ [sendInviteEmail] Erro ao enviar email de convite:', error);
-      console.error('❌ [sendInviteEmail] Status:', response.status);
-      console.error('❌ [sendInviteEmail] Detalhes:', JSON.stringify(error, null, 2));
+      safeLogger.error('❌ [sendInviteEmail] Erro ao enviar email de convite:', {
+        status: response.status,
+        error: error,
+      });
       throw new Error(error.error || `Erro ao enviar email: ${response.status}`);
     }
 
     const result = await response.json();
-    console.log('✅ [sendInviteEmail] Resposta do servidor:', result);
+    safeLogger.log('✅ [sendInviteEmail] Email enviado com sucesso');
     
     // Se houver aviso na resposta, logar para debug
     if (result.warning) {
-      console.warn('⚠️ [sendInviteEmail] Aviso:', result.warning);
+      safeLogger.warn('⚠️ [sendInviteEmail] Aviso:', result.warning);
     }
     
     if (result.note) {
-      console.info('ℹ️ [sendInviteEmail] Nota:', result.note);
+      safeLogger.log('ℹ️ [sendInviteEmail] Nota:', result.note);
     }
     
     return true;
   } catch (error) {
-    console.error('❌ [sendInviteEmail] Erro ao enviar email de convite:', error);
-    if (error instanceof Error) {
-      console.error('❌ [sendInviteEmail] Mensagem de erro:', error.message);
-      console.error('❌ [sendInviteEmail] Stack:', error.stack);
-    }
+    safeLogger.error('❌ [sendInviteEmail] Erro ao enviar email de convite:', {
+      message: error instanceof Error ? error.message : 'Erro desconhecido',
+      stack: error instanceof Error && process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
     throw error;
   }
 }
@@ -126,13 +128,13 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('Erro ao enviar email de recuperação:', error);
+      safeLogger.error('Erro ao enviar email de recuperação:', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Erro ao enviar email de recuperação:', error);
+    safeLogger.error('Erro ao enviar email de recuperação:', error);
     return false;
   }
 }
