@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co https://api.z-api.io",
+              "connect-src 'self' https://*.supabase.co https://api.z-api.io https://viacep.com.br",
               "frame-ancestors 'self'",
               "base-uri 'self'",
               "form-action 'self'",

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabaseClient } from "@/lib/supabaseClient"
+import { getUserErrorMessage } from "@/lib/errorHandler"
 import Logo from "@/components/common/Logo"
 import { CheckCircle2, Loader2 } from "lucide-react"
 
@@ -43,7 +44,14 @@ function LoginFormContent() {
       })
 
       if (error) {
-        setError(error.message)
+        // Usa o errorHandler centralizado para traduzir e logar o erro
+        setError(
+          getUserErrorMessage(error, {
+            action: 'login',
+            component: 'LoginForm',
+            email: email, // Contexto útil para debugging
+          })
+        )
         return
       }
 
@@ -51,7 +59,14 @@ function LoginFormContent() {
         router.push("/") // Redireciona para a página principal após login
       }
     } catch (err) {
-      setError("Erro interno do servidor")
+      // Erros inesperados também são tratados pelo errorHandler
+      setError(
+        getUserErrorMessage(err, {
+          action: 'login',
+          component: 'LoginForm',
+          email: email,
+        })
+      )
     } finally {
       setLoading(false)
     }

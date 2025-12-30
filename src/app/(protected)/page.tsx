@@ -536,14 +536,13 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
     });
   }
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setDateTimeLabel(formatDateTime());
-    }, 1000);
+    }, 60000); // Atualiza a cada minuto já que não há mais segundos
 
     return () => window.clearInterval(interval);
   }, []);
@@ -918,10 +917,10 @@ function DashboardShell({ initialView = "home", extraRoutes }: DashboardShellPro
   const hasCurrentStore = currentStore !== null;
   const hasNetworkSelected = currentNetworkId !== null;
   
-  // Para admins: permitir acesso se tiver uma rede selecionada (mesmo sem lojas)
+  // Para admins: sempre permitir acesso (têm acesso global, não precisam de rede/loja vinculada)
   // Para não-admins: só permitir se tiver lojas OU se tiver loja atual OU estiver vendo todas as lojas
   const shouldShowError = isAdmin
-    ? !hasNetworkSelected && !hasStores && !hasCurrentStore && !isViewingAllStores
+    ? false // Admins sempre têm acesso, mesmo sem rede/loja vinculada
     : !hasStores || (!hasCurrentStore && !isViewingAllStores);
   
   if (shouldShowError) {

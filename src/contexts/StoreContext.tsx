@@ -159,30 +159,63 @@ export function StoreProvider({ children }: StoreProviderProps) {
       if (role === "admin") {
         // Admin vê todas as redes e lojas
         // Tentar buscar de networks primeiro, fallback para orgs (compatibilidade)
+        console.log("🔍 Admin: Iniciando busca de redes...");
         const { data: networksData, error: networksError } = await supabase
           .from("networks")
           .select("id, name, logo_url")
           .eq("is_active", true)
           .order("name", { ascending: true });
         
-        if (networksError && networksError.code !== "PGRST116") {
-          // Se não for erro de tabela não existir, tentar orgs
-          const { data: orgsData, error: orgsError } = await supabase
-            .from("orgs")
-            .select("id, name, logo_url")
-            .order("name", { ascending: true });
-          if (orgsError) throw orgsError;
-          networkRows = (orgsData ?? []).map((row) => ({
-            id: row.id,
-            name: row.name,
-            logoUrl: row.logo_url ?? null,
-          }));
-        } else if (networksData) {
+        console.log("🔍 Admin: Resultado da busca de redes:", {
+          hasError: !!networksError,
+          error: networksError,
+          dataLength: networksData?.length ?? 0,
+          data: networksData
+        });
+        
+        if (networksError) {
+          console.error("❌ Erro ao buscar redes:", networksError);
+          if (networksError.code !== "PGRST116") {
+            // Se não for erro de tabela não existir, tentar orgs
+            const { data: orgsData, error: orgsError } = await supabase
+              .from("orgs")
+              .select("id, name, logo_url")
+              .order("name", { ascending: true });
+            if (orgsError) {
+              console.error("❌ Erro ao buscar orgs:", orgsError);
+              throw orgsError;
+            }
+            networkRows = (orgsData ?? []).map((row) => ({
+              id: row.id,
+              name: row.name,
+              logoUrl: row.logo_url ?? null,
+            }));
+            console.log("📋 Redes carregadas de orgs (fallback):", networkRows.length);
+          } else {
+            // Tabela networks não existe, tentar orgs
+            const { data: orgsData, error: orgsError } = await supabase
+              .from("orgs")
+              .select("id, name, logo_url")
+              .order("name", { ascending: true });
+            if (orgsError) {
+              console.error("❌ Erro ao buscar orgs:", orgsError);
+              throw orgsError;
+            }
+            networkRows = (orgsData ?? []).map((row) => ({
+              id: row.id,
+              name: row.name,
+              logoUrl: row.logo_url ?? null,
+            }));
+            console.log("📋 Redes carregadas de orgs (tabela não existe):", networkRows.length);
+          }
+        } else {
+          // Sem erro, usar os dados retornados (pode ser array vazio)
           networkRows = (networksData ?? []).map((row) => ({
             id: row.id,
             name: row.name,
             logoUrl: row.logo_url ?? null,
           }));
+          console.log("📋 Redes carregadas para admin:", networkRows.length, networkRows);
         }
 
         // Criar mapas de logo de todas as redes (não apenas as que têm lojas)
@@ -355,7 +388,15 @@ export function StoreProvider({ children }: StoreProviderProps) {
       setStores(storeRows);
 
       // Definir rede atual
-      const preferredNetworkId = userNetworkId ?? networkRows[0]?.id ?? null;
+      // Para admins: sempre selecionar a primeira rede se houver (mesmo sem lojas)
+      // Para outros: selecionar rede do usuário ou primeira disponível
+      let preferredNetworkId: string | null = null;
+      if (role === "admin") {
+        // Admin sempre seleciona primeira rede se disponível
+        preferredNetworkId = networkRows[0]?.id ?? null;
+      } else {
+        preferredNetworkId = userNetworkId ?? networkRows[0]?.id ?? null;
+      }
       console.log("🔗 Rede selecionada:", preferredNetworkId);
       setCurrentNetworkIdState(preferredNetworkId);
 
@@ -365,9 +406,14 @@ export function StoreProvider({ children }: StoreProviderProps) {
         : storeRows;
 
       // Definir loja atual
-      // Se for admin, começar com "Todas as lojas" se houver lojas na rede
-      if (role === "admin" && storesForNetwork.length > 0) {
-        setCurrentStoreIdState("all");
+      // Se for admin, começar com "Todas as lojas" se houver lojas na rede, caso contrário null (mas rede já selecionada)
+      if (role === "admin") {
+        if (storesForNetwork.length > 0) {
+          setCurrentStoreIdState("all");
+        } else {
+          // Admin sem lojas: rede selecionada mas sem loja (permite seleção futura)
+          setCurrentStoreIdState(null);
+        }
       } else {
         const preferredStoreId = profile?.default_store_id;
         const fallbackStoreId = storesForNetwork[0]?.id ?? null;
@@ -511,11 +557,15 @@ export function StoreProvider({ children }: StoreProviderProps) {
       : null;
   };
 
+  // Para o StoreSelector, precisamos de todas as lojas (não filtradas)
+  // Para queries e outras operações, usamos storesForCurrentNetwork
+  const allStoresForSelector = stores;
+
   const value: StoreContextValue = {
     loading,
     networks,
     companies: networks, // Compatibilidade: alias para networks
-    stores: storesForCurrentNetwork,
+    stores: allStoresForSelector, // Todas as lojas para o seletor funcionar corretamente
     currentNetworkId,
     currentCompanyId: currentNetworkId, // Compatibilidade: alias para currentNetworkId
     currentStoreId,
@@ -532,6 +582,15 @@ export function StoreProvider({ children }: StoreProviderProps) {
     refresh: loadData,
     getStoreIdsForQuery,
   };
+  
+  console.log("🔍 StoreContext value:", {
+    networksCount: networks.length,
+    companiesCount: networks.length,
+    storesCount: allStoresForSelector.length,
+    currentNetworkId,
+    currentStoreId,
+    isAdmin: profileRole === "admin",
+  });
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

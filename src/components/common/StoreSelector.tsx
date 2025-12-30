@@ -28,58 +28,93 @@ export function StoreSelector() {
     );
   }
 
-  const currentCompany = companies.find((c) => c.id === currentCompanyId);
-  const currentStore = stores.find((s) => s.id === currentStoreId);
+  // Filtrar lojas pela rede selecionada (se houver)
+  const storesForCurrentNetwork = currentCompanyId
+    ? stores.filter((s) => (s.networkId || s.companyId) === currentCompanyId)
+    : stores;
 
-  // Se não há empresas, não mostrar o seletor
-  if (companies.length === 0) {
+  const currentCompany = companies.find((c) => c.id === currentCompanyId);
+  const currentStore = storesForCurrentNetwork.find((s) => s.id === currentStoreId);
+
+  // Debug: log para verificar dados
+  console.log("🔍 StoreSelector - companies:", companies.length, "isAdmin:", isAdmin, "currentCompanyId:", currentCompanyId, "stores:", stores.length, "storesForNetwork:", storesForCurrentNetwork.length);
+
+  // Para admins, sempre mostrar os seletores (mesmo sem redes/lojas)
+  // Para outros, mostrar apenas se houver empresas
+  if (companies.length === 0 && !isAdmin) {
     return null;
   }
 
   return (
     <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap max-w-full">
-      {/* Seletor de Rede (sempre mostrar se houver mais de uma rede) */}
-      {companies.length > 1 && (
+      {/* Seletor de Rede - sempre mostrar para admins, ou se houver redes */}
+      {(companies.length > 0 || isAdmin) && (
         <div className="flex items-center gap-1 min-w-0">
           <Network className="hidden sm:block w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           <Select
-            value={currentCompanyId ?? ""}
-            onValueChange={(value) => setCurrentCompanyId(value)}
+            value={currentCompanyId || undefined}
+            onValueChange={(value) => {
+              if (value && value !== "__empty__") {
+                setCurrentCompanyId(value);
+              }
+            }}
           >
             <SelectTrigger className="w-[120px] sm:w-[140px] lg:w-[160px] h-7 sm:h-8 text-xs">
-              <SelectValue placeholder="Rede" />
+              <SelectValue placeholder={currentCompany?.name ?? (companies.length === 0 ? "Nenhuma rede" : "Selecione a rede")} />
             </SelectTrigger>
             <SelectContent>
-              {companies.map((company) => (
-                <SelectItem key={company.id} value={company.id}>
-                  {company.name}
+              {companies.length > 0 ? (
+                companies.map((company) => (
+                  <SelectItem key={company.id} value={company.id}>
+                    {company.name}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="__empty__" disabled>
+                  Nenhuma rede disponível
                 </SelectItem>
-              ))}
+              )}
             </SelectContent>
           </Select>
         </div>
       )}
 
-      {/* Seletor de Loja (só mostrar se houver lojas) */}
-      {stores.length > 0 && (
+      {/* Seletor de Loja - sempre mostrar para admins, ou se houver lojas */}
+      {(stores.length > 0 || isAdmin) && (
         <div className="flex items-center gap-1 min-w-0">
           <Store className="hidden sm:block w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           <Select
-            value={currentStoreId ?? ""}
-            onValueChange={(value) => setCurrentStoreId(value)}
+            value={currentStoreId || undefined}
+            onValueChange={(value) => {
+              if (value && value !== "__empty__") {
+                setCurrentStoreId(value);
+              }
+            }}
           >
             <SelectTrigger className="w-[120px] sm:w-[140px] lg:w-[160px] h-7 sm:h-8 text-xs">
-              <SelectValue placeholder="Loja" />
+              <SelectValue placeholder={
+                currentStoreId === "all" 
+                  ? "Todas as lojas" 
+                  : currentStore?.name ?? (storesForCurrentNetwork.length === 0 ? "Nenhuma loja" : "Selecione a loja")
+              } />
             </SelectTrigger>
             <SelectContent>
-              {isAdmin && (
-                <SelectItem value="all">Todas as lojas</SelectItem>
-              )}
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
+              {storesForCurrentNetwork.length > 0 ? (
+                <>
+                  {isAdmin && currentCompanyId && (
+                    <SelectItem value="all">Todas as lojas</SelectItem>
+                  )}
+                  {storesForCurrentNetwork.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
+                    </SelectItem>
+                  ))}
+                </>
+              ) : (
+                <SelectItem value="__empty__" disabled>
+                  Nenhuma loja disponível
                 </SelectItem>
-              ))}
+              )}
             </SelectContent>
           </Select>
         </div>
