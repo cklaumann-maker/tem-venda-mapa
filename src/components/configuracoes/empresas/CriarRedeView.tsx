@@ -245,7 +245,8 @@ export function CriarRedeView() {
         const draft: DraftData = JSON.parse(stored);
         setNetworkData(draft.networkData || {});
         setStoreData(draft.storeData || {});
-        setCurrentStep(draft.current_step || 1);
+        // Não restaurar o passo automaticamente - sempre começar do passo 1
+        // setCurrentStep(draft.current_step || 1);
         setLastSaved(draft.lastSaved || null);
         return true;
       }
@@ -273,7 +274,8 @@ export function CriarRedeView() {
         if (result.success && result.data) {
           setNetworkData(result.data.network_data || {});
           setStoreData(result.data.store_data || {});
-          setCurrentStep(result.data.current_step || 1);
+          // Não restaurar o passo automaticamente - sempre começar do passo 1
+          // setCurrentStep(result.data.current_step || 1);
           return true;
         }
       }
