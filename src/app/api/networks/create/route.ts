@@ -44,27 +44,170 @@ export async function POST(req: NextRequest) {
 
     // Parse e validação do body
     let networkData: z.infer<typeof createNetworkSchema>;
+    let body: any = {};
+    let storeData: any = null;
+    
     try {
-      const body = await req.json();
-      safeLogger.log("Body recebido para criação de rede"); // Não logar body completo (pode conter dados sensíveis)
-      networkData = createNetworkSchema.parse(body);
-    } catch (parseError: any) {
-      if (parseError instanceof z.ZodError) {
-        safeLogger.error("Erro de validação Zod:", parseError.errors);
+      body = await req.json();
+      
+      // Extrair dados da loja se fornecidos (opcional) - precisa estar acessível fora do try
+      storeData = body?.store || null;
+      
+      // Log do body (sem dados sensíveis) em desenvolvimento
+      if (process.env.NODE_ENV === 'development') {
+        const bodyForLog = {
+          ...body,
+          owner: body.owner ? {
+            ...body.owner,
+            password: '***',
+            password_confirm: '***',
+          } : body.owner,
+          store: storeData ? { ...storeData } : null,
+        };
+        safeLogger.log("Body recebido para criação de rede:", JSON.stringify(bodyForLog, null, 2));
+        safeLogger.log("Campos presentes no body:", {
+          hasOwner: !!body.owner,
+          hasStore: !!storeData,
+          ownerFields: body.owner ? Object.keys(body.owner) : [],
+          storeFields: storeData ? Object.keys(storeData) : [],
+          networkFields: Object.keys(body).filter(k => k !== 'owner' && k !== 'store'),
+        });
+      }
+      
+      // Validar apenas os campos da rede (sem owner e store)
+      const bodyForValidation = { ...body };
+      delete bodyForValidation.owner;
+      delete bodyForValidation.store;
+      
+      // Usar safeParse para ter mais controle sobre erros
+      const validationResult = createNetworkSchema.safeParse(bodyForValidation);
+      
+      // Log do resultado da validação
+      if (process.env.NODE_ENV === 'development') {
+        safeLogger.log("Resultado da validação Zod:", {
+          success: validationResult.success,
+          hasError: !!validationResult.error,
+          errorType: validationResult.error?.constructor?.name,
+          errorIssues: validationResult.error?.issues,
+        });
+      }
+      
+      if (!validationResult.success) {
+        // Log detalhado para debug
+        safeLogger.error("Erro de validação Zod - validationResult:", {
+          hasError: !!validationResult.error,
+          errorType: validationResult.error?.constructor?.name,
+          errorName: validationResult.error?.name,
+          errorsLength: validationResult.error?.errors?.length || 0,
+          errors: validationResult.error?.errors,
+          issuesLength: validationResult.error?.issues?.length || 0,
+          issues: validationResult.error?.issues,
+        });
+        
+        // Tentar usar issues se errors estiver vazio (pode acontecer com refine)
+        // ZodError tem tanto 'errors' quanto 'issues', mas 'issues' é o array principal
+        const zodIssues = validationResult.error?.issues || validationResult.error?.errors || [];
+        
+        // Log dos erros brutos
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Zod issues raw:', JSON.stringify(zodIssues, null, 2));
+          console.log('Zod error completo:', JSON.stringify(validationResult.error, null, 2));
+        }
+        
+        // Garantir que details seja sempre um array válido
+        let errorDetails: Array<{ path: string; message: string }> = [];
+        
+        if (Array.isArray(zodIssues) && zodIssues.length > 0) {
+          errorDetails = zodIssues.map((e: any) => {
+            try {
+              // Garantir que e seja um objeto válido
+              if (!e || typeof e !== 'object') {
+                safeLogger.error("Erro Zod não é objeto:", e);
+                return {
+                  path: 'campo',
+                  message: 'Erro de validação',
+                };
+              }
+              
+              // Processar path
+              let pathStr = 'campo';
+              if (e.path) {
+                if (Array.isArray(e.path)) {
+                  pathStr = e.path.join('.');
+                } else if (typeof e.path === 'string') {
+                  pathStr = e.path;
+                } else {
+                  pathStr = String(e.path);
+                }
+              }
+              
+              // Processar message
+              const messageStr = e.message ? String(e.message) : 'Erro de validação';
+              
+              return {
+                path: pathStr,
+                message: messageStr,
+              };
+            } catch (mapError: any) {
+              safeLogger.error("Erro ao processar erro de validação:", mapError, e);
+              return {
+                path: 'campo',
+                message: 'Erro ao processar validação',
+              };
+            }
+          });
+        } else {
+          // Se zodIssues está vazio, logar informações de debug
+          safeLogger.error("zodIssues está vazio ou não é array:", {
+            zodIssues,
+            isArray: Array.isArray(zodIssues),
+            length: zodIssues?.length,
+            validationResultError: validationResult.error,
+            hasErrors: !!validationResult.error?.errors,
+            hasIssues: !!validationResult.error?.issues,
+            errorsLength: validationResult.error?.errors?.length || 0,
+            issuesLength: validationResult.error?.issues?.length || 0,
+          });
+        }
+        
+        // Se não conseguiu processar nenhum erro, adicionar erro genérico com informações de debug
+        if (errorDetails.length === 0) {
+          safeLogger.error("Nenhum erro de validação foi processado. validationResult.error completo:", JSON.stringify(validationResult.error, null, 2));
+          
+          // Tentar extrair mensagem do refine se houver
+          let refineMessage = 'Erro de validação - verifique os campos obrigatórios';
+          if (validationResult.error?.issues && validationResult.error.issues.length > 0) {
+            const firstIssue = validationResult.error.issues[0];
+            if (firstIssue.message) {
+              refineMessage = firstIssue.message;
+            }
+          }
+          
+          errorDetails = [{ 
+            path: 'dados', 
+            message: `${refineMessage}. (Debug: ${zodIssues.length === 0 ? 'sem issues Zod' : 'issues não processados'})` 
+          }];
+        }
+        
         return NextResponse.json(
           { 
             error: "Dados inválidos", 
-            details: parseError.errors.map((e) => ({
-              path: e.path.join('.'),
-              message: e.message,
-            }))
+            message: "Alguns campos obrigatórios estão faltando ou têm valores inválidos",
+            details: errorDetails
           },
           { status: 400 }
         );
       }
+      
+      networkData = validationResult.data;
+    } catch (parseError: any) {
       safeLogger.error("Erro ao parsear body:", parseError);
       return NextResponse.json(
-        { error: "Erro ao processar dados da requisição", details: process.env.NODE_ENV === 'development' ? parseError.message : undefined },
+        { 
+          error: "Erro ao processar dados da requisição", 
+          message: process.env.NODE_ENV === 'development' ? parseError.message : "Erro ao processar dados da requisição",
+          details: process.env.NODE_ENV === 'development' ? [{ path: 'body', message: parseError.message }] : undefined 
+        },
         { status: 400 }
       );
     }
@@ -95,7 +238,11 @@ export async function POST(req: NextRequest) {
 
     if (existingUserByEmail) {
       return NextResponse.json(
-        { error: `Já existe um usuário com o e-mail "${ownerData.email}"` },
+        { 
+          error: `Já existe um usuário com o e-mail "${ownerData.email}"`,
+          message: "Este e-mail já está cadastrado no sistema",
+          details: [{ path: 'owner.email', message: `E-mail "${ownerData.email}" já está em uso` }]
+        },
         { status: 409 }
       );
     }
@@ -110,7 +257,11 @@ export async function POST(req: NextRequest) {
 
     if (existingProfileByCPF) {
       return NextResponse.json(
-        { error: `Já existe um usuário com o CPF "${ownerData.cpf}"` },
+        { 
+          error: `Já existe um usuário com o CPF "${ownerData.cpf}"`,
+          message: "Este CPF já está cadastrado no sistema",
+          details: [{ path: 'owner.cpf', message: `CPF "${ownerData.cpf}" já está em uso` }]
+        },
         { status: 409 }
       );
     }
@@ -132,7 +283,11 @@ export async function POST(req: NextRequest) {
 
     if (existingNetworkByName) {
       return NextResponse.json(
-        { error: `Já existe uma rede com o nome "${networkData.name}"` },
+        { 
+          error: `Já existe uma rede com o nome "${networkData.name}"`,
+          message: "Este nome de rede já está cadastrado",
+          details: [{ path: 'name', message: `Nome "${networkData.name}" já está em uso` }]
+        },
         { status: 409 }
       );
     }
@@ -155,7 +310,11 @@ export async function POST(req: NextRequest) {
 
       if (existingNetworkByCNPJ) {
         return NextResponse.json(
-          { error: `Já existe uma rede com o CNPJ "${networkData.cnpj}"` },
+          { 
+            error: `Já existe uma rede com o CNPJ "${networkData.cnpj}"`,
+            message: "Este CNPJ já está cadastrado",
+            details: [{ path: 'cnpj', message: `CNPJ "${networkData.cnpj}" já está em uso` }]
+          },
           { status: 409 }
         );
       }
@@ -295,7 +454,9 @@ export async function POST(req: NextRequest) {
       full_name: ownerData.full_name,
       role: 'owner',
       network_id: networkId,
-      org_id: networkId, // Compatibilidade
+      // org_id não deve ser preenchido - ele referencia orgs.id, não networks.id
+      // Se necessário para compatibilidade, deve ser null ou um org_id válido
+      org_id: null,
       cpf: cleanCPF,
       is_active: true,
     };
@@ -304,6 +465,9 @@ export async function POST(req: NextRequest) {
     if (ownerData.birth_date) profileInsertData.birth_date = ownerData.birth_date;
     if (ownerData.photo_url) profileInsertData.photo_url = ownerData.photo_url;
 
+    // Inserir perfil
+    // NOTA: Se houver erro com trigger log_user_changes() tentando usar old_values/new_values
+    // em vez de old_value/new_value, será necessário corrigir a função no banco de dados
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert(profileInsertData);
@@ -339,6 +503,79 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Criar primeira loja se dados foram fornecidos
+    let createdStore = null;
+    
+    if (storeData && storeData.name && storeData.cnpj && storeData.company_name) {
+      try {
+        // Validar e preparar dados da loja
+        const cleanStoreCNPJ = String(storeData.cnpj).replace(/\D/g, '');
+        if (cleanStoreCNPJ.length !== 14) {
+          safeLogger.warn("CNPJ da loja inválido, pulando criação da loja");
+        } else {
+          const storeInsertData: any = {
+            network_id: networkId,
+            name: String(storeData.name).trim(),
+            cnpj: cleanStoreCNPJ,
+            company_name: String(storeData.company_name).trim(),
+            zip_code: String(storeData.zip_code || '').replace(/\D/g, '').substring(0, 8),
+            state: String(storeData.state || '').trim().substring(0, 2).toUpperCase(),
+            city: String(storeData.city || '').trim(),
+            phone: String(storeData.phone || '').replace(/\D/g, ''),
+            email: String(storeData.email || '').trim().toLowerCase(),
+            is_active: true,
+          };
+
+          // Campos opcionais da loja
+          if (storeData.street) storeInsertData.street = String(storeData.street).trim();
+          if (storeData.street_number) storeInsertData.street_number = String(storeData.street_number).trim();
+          if (storeData.address_complement) storeInsertData.address_complement = String(storeData.address_complement).trim();
+          if (storeData.neighborhood) storeInsertData.neighborhood = String(storeData.neighborhood).trim();
+          if (storeData.trade_name) storeInsertData.trade_name = String(storeData.trade_name).trim();
+          if (storeData.state_registration) storeInsertData.state_registration = String(storeData.state_registration).trim();
+          if (storeData.municipal_registration) storeInsertData.municipal_registration = String(storeData.municipal_registration).trim();
+          if (storeData.logo_url) storeInsertData.logo_url = String(storeData.logo_url).trim();
+          if (storeData.internal_code) storeInsertData.internal_code = String(storeData.internal_code).trim();
+          if (storeData.manager_name) storeInsertData.manager_name = String(storeData.manager_name).trim();
+
+          // Criar loja
+          const { data: newStore, error: createStoreError } = await supabaseAdmin
+            .from('stores')
+            .insert(storeInsertData)
+            .select()
+            .single();
+
+          if (createStoreError) {
+            safeLogger.error("Erro ao criar primeira loja:", createStoreError);
+            // Não falhar a criação da rede se a loja falhar, apenas logar
+          } else {
+            createdStore = newStore;
+            safeLogger.log(`✅ Primeira loja "${newStore.name}" criada com sucesso`);
+
+            // Criar entrada em store_members para o proprietário ter acesso à loja
+            const { error: memberError } = await supabaseAdmin
+              .from('store_members')
+              .insert({
+                store_id: newStore.id,
+                user_id: ownerUserId,
+                role: 'manager', // Proprietário é manager/admin
+                active: true,
+              });
+
+            if (memberError) {
+              safeLogger.error("Erro ao criar store_member para proprietário:", memberError);
+              // Não falhar se isso der erro, mas logar
+            } else {
+              safeLogger.log("✅ Entrada em store_members criada para proprietário");
+            }
+          }
+        }
+      } catch (storeError: any) {
+        safeLogger.error("Erro inesperado ao criar primeira loja:", storeError);
+        // Não falhar a criação da rede se a loja falhar
+      }
+    }
+
     // TODO: Enviar email de boas-vindas ao proprietário com link para definir senha
     // Por enquanto, apenas retornar sucesso
 
@@ -348,26 +585,39 @@ export async function POST(req: NextRequest) {
         ...newNetwork,
         owner_id: ownerUserId,
       },
-      message: "Rede e proprietário criados com sucesso",
+      message: createdStore 
+        ? "Rede, proprietário e primeira loja criados com sucesso"
+        : "Rede e proprietário criados com sucesso",
       owner: {
         id: ownerUserId,
         email: ownerData.email,
         // Não retornar senha temporária por segurança
       },
+      store: createdStore ? {
+        id: createdStore.id,
+        name: createdStore.name,
+      } : undefined,
     });
   } catch (error: any) {
     const errorMessage = error?.message || 'Erro desconhecido';
+    const errorStack = process.env.NODE_ENV === 'development' ? error?.stack : undefined;
     
     safeLogger.error("Erro inesperado ao criar rede:", {
       message: errorMessage,
-      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+      stack: errorStack,
+      errorType: error?.constructor?.name,
+      errorName: error?.name,
     });
     
     try {
       return NextResponse.json(
         { 
           error: "Erro interno do servidor",
-          message: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+          message: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+          details: process.env.NODE_ENV === 'development' ? {
+            type: error?.constructor?.name,
+            name: error?.name,
+          } : undefined,
         },
         { status: 500 }
       );

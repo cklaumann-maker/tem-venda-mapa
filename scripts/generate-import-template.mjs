@@ -1,3 +1,8 @@
+/**
+ * ⚠️ AVISO DE SEGURANÇA: xlsx possui vulnerabilidades conhecidas (GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9)
+ * Este script APENAS CRIA arquivos Excel (não lê arquivos de usuários), reduzindo o risco.
+ * NUNCA use para processar arquivos de fontes não confiáveis.
+ */
 import * as XLSX from 'xlsx';
 import fs from 'fs';
 import path from 'path';
@@ -509,12 +514,40 @@ XLSX.utils.book_append_sheet(workbook, lojasWorksheet, 'Lojas');
 // ========================================
 // SALVAR ARQUIVO
 // ========================================
+// Validações de segurança
 const templateDir = path.join(__dirname, '..', 'docs', 'templates');
+
+// Garantir que o diretório está dentro do projeto (prevenir path traversal)
+const projectRoot = path.resolve(__dirname, '..');
+const resolvedTemplateDir = path.resolve(templateDir);
+if (!resolvedTemplateDir.startsWith(projectRoot)) {
+  throw new Error('❌ ERRO DE SEGURANÇA: Caminho de saída inválido');
+}
+
+// Criar diretório se não existir
 if (!fs.existsSync(templateDir)) {
   fs.mkdirSync(templateDir, { recursive: true });
 }
 
-const outputPath = path.join(templateDir, 'template-importacao-rede-lojas.xlsx');
+// Validar nome do arquivo (apenas alfanuméricos, hífens e underscores)
+const outputFilename = 'template-importacao-rede-lojas.xlsx';
+if (!/^[a-zA-Z0-9._-]+\.xlsx$/.test(outputFilename)) {
+  throw new Error('❌ ERRO DE SEGURANÇA: Nome de arquivo inválido');
+}
+
+const outputPath = path.join(templateDir, outputFilename);
+
+// Validar que não está sobrescrevendo arquivos críticos do sistema
+const criticalPaths = [
+  path.join(projectRoot, 'package.json'),
+  path.join(projectRoot, 'next.config.ts'),
+  path.join(projectRoot, 'tsconfig.json')
+];
+if (criticalPaths.includes(outputPath)) {
+  throw new Error('❌ ERRO DE SEGURANÇA: Tentativa de sobrescrever arquivo crítico');
+}
+
+// Salvar arquivo
 XLSX.writeFile(workbook, outputPath);
 
 console.log('✅ Template XLSX criado com sucesso!');

@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "audit": "npm audit",
+    "audit:fix": "npm audit --audit-level=moderate"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",

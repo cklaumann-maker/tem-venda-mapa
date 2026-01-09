@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { DashboardPage } from "../../page";
 import { useStore } from "@/contexts/StoreContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Building2, Type, Power, AlertCircle, ArrowRight, Plus, RotateCcw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CriarRedeView } from "@/components/configuracoes/empresas/CriarRedeView";
@@ -68,7 +67,10 @@ function ConfiguracoesEmpresasContent() {
 
           <div className="grid gap-4 md:grid-cols-2">
             {/* Criar Rede */}
-            <Card className="border-2 border-emerald-500 hover:border-emerald-600 transition-colors cursor-pointer group bg-emerald-50/50">
+            <Card 
+              className="border-2 border-emerald-500 hover:border-emerald-600 transition-all cursor-pointer group bg-emerald-50/50 hover:shadow-md hover:-translate-y-0.5"
+              onClick={() => router.push("/configuracoes/empresas?view=criar-rede")}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -83,18 +85,18 @@ function ConfiguracoesEmpresasContent() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => router.push("/configuracoes/empresas?view=criar-rede")}
-                >
-                  Criar Rede
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                <div className="flex items-center justify-between text-sm font-medium text-emerald-600 group-hover:text-emerald-700 transition-colors">
+                  <span>Criar Rede</span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </div>
               </CardContent>
             </Card>
 
             {/* Alterar Dados */}
-            <Card className="border-2 hover:border-emerald-500 transition-colors cursor-pointer group">
+            <Card 
+              className="border-2 hover:border-emerald-500 transition-all cursor-pointer group hover:shadow-md hover:-translate-y-0.5"
+              onClick={() => router.push("/configuracoes/empresas?view=alterar-dados")}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -109,19 +111,18 @@ function ConfiguracoesEmpresasContent() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  className="w-full group-hover:bg-emerald-50 group-hover:border-emerald-500 transition-colors"
-                  onClick={() => router.push("/configuracoes/empresas?view=alterar-dados")}
-                >
-                  Acessar
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                <div className="flex items-center justify-between text-sm font-medium text-emerald-600 group-hover:text-emerald-700 transition-colors">
+                  <span>Acessar</span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </div>
               </CardContent>
             </Card>
 
             {/* Desativar */}
-            <Card className="border-2 hover:border-rose-500 transition-colors cursor-pointer group">
+            <Card 
+              className="border-2 hover:border-rose-500 transition-all cursor-pointer group hover:shadow-md hover:-translate-y-0.5"
+              onClick={() => router.push("/configuracoes/empresas?view=desativar")}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -136,19 +137,18 @@ function ConfiguracoesEmpresasContent() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  className="w-full group-hover:bg-rose-50 group-hover:border-rose-500 transition-colors"
-                  onClick={() => router.push("/configuracoes/empresas?view=desativar")}
-                >
-                  Acessar
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                <div className="flex items-center justify-between text-sm font-medium text-rose-600 group-hover:text-rose-700 transition-colors">
+                  <span>Acessar</span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </div>
               </CardContent>
             </Card>
 
             {/* Reativar */}
-            <Card className="border-2 hover:border-emerald-500 transition-colors cursor-pointer group">
+            <Card 
+              className="border-2 hover:border-emerald-500 transition-all cursor-pointer group hover:shadow-md hover:-translate-y-0.5"
+              onClick={() => router.push("/configuracoes/empresas?view=reativar")}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -163,14 +163,10 @@ function ConfiguracoesEmpresasContent() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  className="w-full group-hover:bg-emerald-50 group-hover:border-emerald-500 transition-colors"
-                  onClick={() => router.push("/configuracoes/empresas?view=reativar")}
-                >
-                  Acessar
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                <div className="flex items-center justify-between text-sm font-medium text-emerald-600 group-hover:text-emerald-700 transition-colors">
+                  <span>Acessar</span>
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </div>
               </CardContent>
             </Card>
           </div>

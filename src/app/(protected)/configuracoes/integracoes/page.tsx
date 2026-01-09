@@ -2,7 +2,6 @@
 
 import { DashboardPage } from "../../page";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { PlugZap, MessageSquare, Package, ArrowRight, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -67,7 +66,7 @@ function IntegracoesMenuView() {
           return (
             <Card
               key={integration.id}
-              className={`relative overflow-hidden transition-all duration-200 hover:shadow-lg ${
+              className={`relative overflow-hidden transition-all duration-200 hover:shadow-lg group ${
                 isAvailable
                   ? "cursor-pointer hover:border-emerald-300 hover:-translate-y-1"
                   : "opacity-75 cursor-not-allowed"
@@ -102,30 +101,16 @@ function IntegracoesMenuView() {
               </CardHeader>
               
               <CardContent>
-                {isAvailable ? (
-                  <Button
-                    className={`w-full ${
-                      integration.color === "emerald" ? "bg-emerald-600 hover:bg-emerald-700" :
-                      integration.color === "blue" ? "bg-blue-600 hover:bg-blue-700" :
-                      "bg-purple-600 hover:bg-purple-700"
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(integration.path);
-                    }}
-                  >
-                    Configurar
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    disabled
-                    className="w-full opacity-50"
-                  >
-                    Em breve
-                  </Button>
-                )}
+                <div className={`flex items-center justify-between text-sm font-medium transition-colors ${
+                  isAvailable
+                    ? integration.color === "emerald" ? "text-emerald-600 group-hover:text-emerald-700" :
+                      integration.color === "blue" ? "text-blue-600 group-hover:text-blue-700" :
+                      "text-purple-600 group-hover:text-purple-700"
+                    : "text-muted-foreground opacity-50"
+                }`}>
+                  <span>{isAvailable ? "Configurar" : "Em breve"}</span>
+                  {isAvailable && <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
+                </div>
               </CardContent>
             </Card>
           );

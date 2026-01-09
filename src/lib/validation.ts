@@ -254,8 +254,9 @@ export const ownerDataSchema = z.object({
   cpf: cpfSchema,
   password: passwordSchema,
   password_confirm: z.string(),
+  // Campos obrigatórios
+  birth_date: z.string().date("Data de nascimento deve estar no formato YYYY-MM-DD"),
   // Campos opcionais
-  birth_date: z.string().date().optional(),
   photo_url: z.string().url().optional(),
 }).refine((data) => data.password === data.password_confirm, {
   message: "As senhas não coincidem",

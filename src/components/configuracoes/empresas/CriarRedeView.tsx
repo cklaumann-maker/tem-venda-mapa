@@ -43,6 +43,7 @@ import { useRouter } from "next/navigation";
 type FeedbackState = {
   type: "success" | "error";
   message: string;
+  retryAfter?: number; // Tempo em segundos para rate limiting
 } | null;
 
 interface NetworkFormData {
@@ -228,6 +229,21 @@ async function fetchAddressByCEP(cep: string): Promise<ViaCEPResponse | null> {
 
 const TOTAL_STEPS = 6;
 
+// Função auxiliar para formatar o countdown
+function formatCountdown(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${secs}s`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${secs}s`;
+  } else {
+    return `${secs}s`;
+  }
+}
+
 const BRAZILIAN_STATES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
   'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
@@ -255,11 +271,50 @@ export function CriarRedeView() {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   
-  // Estados para destacar campos obrigatórios em vermelho (Passo 3)
-  const [cnpjError, setCnpjError] = useState(false);
+  const [cpfError, setCpfError] = useState<string | null>(null);
   const [companyNameError, setCompanyNameError] = useState(false);
   const [tradeNameError, setTradeNameError] = useState(false);
-  const [cpfError, setCpfError] = useState<string | null>(null);
+  const [birthDateError, setBirthDateError] = useState<string | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+
+  // ============================================
+  // CRONÔMETRO DE RATE LIMITING
+  // ============================================
+  
+  useEffect(() => {
+    if (retryCountdown === null || retryCountdown <= 0) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setRetryCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [retryCountdown]);
+
+  // Limpar countdown quando feedback for limpo
+  useEffect(() => {
+    if (!feedback || !feedback.retryAfter) {
+      setRetryCountdown(null);
+    }
+  }, [feedback]);
+
+  // Quando countdown chegar a zero, atualizar feedback para remover retryAfter
+  useEffect(() => {
+    if (retryCountdown === 0 && feedback?.retryAfter) {
+      setFeedback({
+        type: "error",
+        message: "Você pode tentar criar a rede novamente agora.",
+      });
+      setRetryCountdown(null);
+    }
+  }, [retryCountdown, feedback]);
 
   // ============================================
   // PERSISTÊNCIA DE RASCUNHOS
@@ -367,7 +422,7 @@ export function CriarRedeView() {
       } catch (error) {
         console.error('Erro ao salvar no localStorage:', error);
       }
-    }, 2000);
+    }, 3000); // Aumentado para 3 segundos para reduzir requisições
   }, []);
 
   // Função de debounce para backend (chamada dentro do handler)
@@ -479,22 +534,132 @@ export function CriarRedeView() {
     debouncedSaveToBackend();
   }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
+  // Função para validar CPF (mesma lógica do backend)
+  const validateCPF = useCallback((cpf: string): boolean => {
+    const cleanCPF = cpf.replace(/[^\d]/g, '');
+    
+    // Deve ter exatamente 11 dígitos
+    if (cleanCPF.length !== 11) return false;
+    
+    // Verifica se todos os dígitos são iguais (CPF inválido)
+    if (/^(\d)\1+$/.test(cleanCPF)) return false;
+    
+    // Valida dígitos verificadores
+    let sum = 0;
+    let remainder;
+    
+    // Valida primeiro dígito verificador
+    for (let i = 1; i <= 9; i++) {
+      sum += parseInt(cleanCPF.substring(i - 1, i)) * (11 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(cleanCPF.substring(9, 10))) return false;
+    
+    // Valida segundo dígito verificador
+    sum = 0;
+    for (let i = 1; i <= 10; i++) {
+      sum += parseInt(cleanCPF.substring(i - 1, i)) * (12 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(cleanCPF.substring(10, 11))) return false;
+    
+    return true;
+  }, []);
+
   const handleOwnerCPFBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const cpfDigits = value.replace(/\D/g, '');
-    if (cpfDigits.length > 0 && cpfDigits.length !== 11) {
+    
+    if (cpfDigits.length === 0) {
+      setCpfError(null);
+      return;
+    }
+    
+    if (cpfDigits.length !== 11) {
       setCpfError("CPF deve ter 11 dígitos completos");
+      return;
+    }
+    
+    // Validar dígitos verificadores
+    if (!validateCPF(value)) {
+      setCpfError("CPF inválido. Verifique os dígitos verificadores.");
     } else {
       setCpfError(null);
     }
+  }, [validateCPF]);
+
+  // Função para validar data de nascimento (padrão bigtech)
+  const validateBirthDate = useCallback((dateString: string): { valid: boolean; error: string | null } => {
+    if (!dateString || dateString.trim() === '') {
+      return { valid: false, error: "Data de nascimento é obrigatória" };
+    }
+
+    // Verificar formato básico (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dateString)) {
+      return { valid: false, error: "Formato de data inválido. Use DD/MM/AAAA ou selecione no calendário" };
+    }
+
+    // Criar objeto Date e verificar se é válida
+    const date = new Date(dateString + 'T00:00:00');
+    const [year, month, day] = dateString.split('-').map(Number);
+    
+    // Verificar se a data é válida (ex: não aceita 20040-01-01)
+    if (isNaN(date.getTime()) || 
+        date.getFullYear() !== year || 
+        date.getMonth() + 1 !== month || 
+        date.getDate() !== day) {
+      return { valid: false, error: "Data inválida. Verifique o dia, mês e ano" };
+    }
+
+    // Verificar se o ano está em um range válido (1900 até hoje)
+    const currentYear = new Date().getFullYear();
+    if (year < 1900 || year > currentYear) {
+      return { valid: false, error: `Ano deve estar entre 1900 e ${currentYear}` };
+    }
+
+    // Verificar se a data não é no futuro
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date > today) {
+      return { valid: false, error: "Data de nascimento não pode ser no futuro" };
+    }
+
+    // Verificar idade mínima (18 anos)
+    const minAgeDate = new Date();
+    minAgeDate.setFullYear(minAgeDate.getFullYear() - 18);
+    if (date > minAgeDate) {
+      return { valid: false, error: "Você deve ter pelo menos 18 anos para criar uma rede" };
+    }
+
+    // Verificar idade máxima razoável (120 anos)
+    const maxAgeDate = new Date();
+    maxAgeDate.setFullYear(maxAgeDate.getFullYear() - 120);
+    if (date < maxAgeDate) {
+      return { valid: false, error: "Data de nascimento inválida. Verifique o ano informado" };
+    }
+
+    return { valid: true, error: null };
   }, []);
 
   const handleOwnerBirthDate = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setOwnerData(prev => ({ ...prev, birth_date: value }));
+    
+    // Validar a data
+    const validation = validateBirthDate(value);
+    if (validation.error) {
+      setBirthDateError(validation.error);
+    } else {
+      setBirthDateError(null);
+    }
+    
+    // Atualizar sempre, mas mostrar erro se inválido
+    setOwnerData(prev => ({ ...prev, birth_date: value || undefined }));
     debouncedSaveToLocalStorage();
     debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
+  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend, validateBirthDate]);
 
 
   const handleOwnerPassword = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -788,76 +953,61 @@ export function CriarRedeView() {
     debouncedSaveToBackend();
   }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
-  // Função para atualizar estados de erro dos campos relacionados (Passo 3)
-  // Os 3 campos são interligados: se um estiver preenchido, os outros dois devem estar preenchidos
-  const updateStep4FieldErrors = useCallback((cnpj: string, companyName: string, tradeName: string) => {
-    const hasCNPJ = !!(cnpj && cnpj.replace(/\D/g, '').length === 14);
-    const hasCompanyName = !!(companyName && companyName.trim().length > 0);
-    const hasTradeName = !!(tradeName && tradeName.trim().length > 0);
-    
-    // Se qualquer um dos 3 campos estiver preenchido, os outros dois devem estar preenchidos
-    if (hasCNPJ || hasCompanyName || hasTradeName) {
-      // Se preencheu CNPJ, Razão Social e Nome Fantasia devem ser obrigatórios
-      if (hasCNPJ) {
-        setCompanyNameError(!hasCompanyName);
-        setTradeNameError(!hasTradeName);
-      }
-      
-      // Se preencheu Razão Social, CNPJ e Nome Fantasia devem ser obrigatórios
-      if (hasCompanyName) {
-        setCnpjError(!hasCNPJ);
-        setTradeNameError(!hasTradeName);
-      }
-      
-      // Se preencheu Nome Fantasia, CNPJ e Razão Social devem ser obrigatórios
-      if (hasTradeName) {
-        setCnpjError(!hasCNPJ);
-        setCompanyNameError(!hasCompanyName);
-      }
-              } else {
-      // Se nenhum campo estiver preenchido, não há erros
-      setCnpjError(false);
-      setCompanyNameError(false);
-      setTradeNameError(false);
-    }
-  }, []);
 
   // Handlers para Passo 3: Informações Adicionais
   const handleNetworkCNPJ = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = maskCNPJ(e.target.value);
+    const cnpjDigits = value.replace(/\D/g, '');
+    const hasCNPJ = cnpjDigits.length === 14;
+    
     setNetworkData(prev => {
       const newData = { ...prev, cnpj: value };
-      // Atualizar estados de erro imediatamente
-      updateStep4FieldErrors(value, prev.company_name || '', prev.trade_name || '');
+      
+      // Se CNPJ foi removido ou não tem 14 dígitos, limpar erros
+      if (!hasCNPJ) {
+        setCompanyNameError(false);
+        setTradeNameError(false);
+      }
+      
       return newData;
     });
     debouncedSaveToLocalStorage();
     debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend, updateStep4FieldErrors]);
+  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
   const handleCompanyName = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setNetworkData(prev => {
       const newData = { ...prev, company_name: value };
-      // Atualizar estados de erro imediatamente
-      updateStep4FieldErrors(prev.cnpj || '', value, prev.trade_name || '');
+      
+      // Se preencheu e tem CNPJ válido, limpar erro
+      const cnpjDigits = prev.cnpj ? prev.cnpj.replace(/\D/g, '') : '';
+      if (cnpjDigits.length === 14 && value.trim().length > 0) {
+        setCompanyNameError(false);
+      }
+      
       return newData;
     });
     debouncedSaveToLocalStorage();
     debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend, updateStep4FieldErrors]);
+  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
   const handleTradeName = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setNetworkData(prev => {
       const newData = { ...prev, trade_name: value };
-      // Atualizar estados de erro imediatamente
-      updateStep4FieldErrors(prev.cnpj || '', prev.company_name || '', value);
+      
+      // Se preencheu e tem CNPJ válido, limpar erro
+      const cnpjDigits = prev.cnpj ? prev.cnpj.replace(/\D/g, '') : '';
+      if (cnpjDigits.length === 14 && value.trim().length > 0) {
+        setTradeNameError(false);
+      }
+      
       return newData;
     });
     debouncedSaveToLocalStorage();
     debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend, updateStep4FieldErrors]);
+  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
   const handleStateRegistration = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -1173,8 +1323,6 @@ export function CriarRedeView() {
           internal_notes: '',
           tags: undefined,
         }));
-        setCnpjError(null);
-        setCompanyNameError(null);
       } else if (currentStep === 4) {
         // Limpar dados da loja
         setStoreData({});
@@ -1233,6 +1381,23 @@ export function CriarRedeView() {
       } else {
         setCpfError(null);
       }
+      
+      // Validar data de nascimento (obrigatório)
+      if (!ownerData.birth_date || ownerData.birth_date.trim() === '') {
+        setBirthDateError("Data de nascimento é obrigatória");
+        setFeedback({ type: "error", message: "Data de nascimento é obrigatória" });
+        return false;
+      }
+      
+      const birthDateValidation = validateBirthDate(ownerData.birth_date);
+      if (!birthDateValidation.valid) {
+        setBirthDateError(birthDateValidation.error || "Data de nascimento inválida");
+        setFeedback({ type: "error", message: birthDateValidation.error || "Data de nascimento inválida" });
+        return false;
+      } else {
+        setBirthDateError(null);
+      }
+      
       if (!ownerData.password || ownerData.password.length < 8) {
         setPasswordError("Senha não atende aos critérios de segurança");
         setFeedback({ type: "error", message: "Senha não atende aos critérios de segurança. Verifique os requisitos abaixo." });
@@ -1310,8 +1475,6 @@ export function CriarRedeView() {
     if (currentStep === 3) {
       const cnpjDigits = networkData.cnpj ? networkData.cnpj.replace(/\D/g, '') : '';
       const hasCNPJ = cnpjDigits.length === 14;
-      const hasCompanyName = networkData.company_name && networkData.company_name.trim().length > 0;
-      const hasTradeName = networkData.trade_name && networkData.trade_name.trim().length > 0;
       
       // Se começou a preencher CNPJ, deve ter 14 dígitos completos
       if (networkData.cnpj && cnpjDigits.length > 0 && cnpjDigits.length !== 14) {
@@ -1319,40 +1482,30 @@ export function CriarRedeView() {
         return false;
       }
       
-      // Se qualquer um dos 3 campos estiver preenchido, os outros dois devem estar preenchidos
-      if (hasCNPJ || hasCompanyName || hasTradeName) {
-        // Se preencheu CNPJ, Razão Social e Nome Fantasia devem estar preenchidos
-        if (hasCNPJ && !hasCompanyName) {
-          setFeedback({ type: "error", message: "Se você preencheu o CNPJ, também deve preencher a Razão Social e o Nome Fantasia" });
+      // Se CNPJ estiver preenchido, Razão Social e Nome Fantasia são obrigatórios
+      if (hasCNPJ) {
+        const hasCompanyName = networkData.company_name && networkData.company_name.trim().length > 0;
+        const hasTradeName = networkData.trade_name && networkData.trade_name.trim().length > 0;
+        
+        if (!hasCompanyName) {
+          setCompanyNameError(true);
+          setFeedback({ type: "error", message: "Razão Social é obrigatória quando o CNPJ está preenchido" });
           return false;
         }
         
-        if (hasCNPJ && !hasTradeName) {
-          setFeedback({ type: "error", message: "Se você preencheu o CNPJ, também deve preencher a Razão Social e o Nome Fantasia" });
+        if (!hasTradeName) {
+          setTradeNameError(true);
+          setFeedback({ type: "error", message: "Nome Fantasia é obrigatório quando o CNPJ está preenchido" });
           return false;
         }
         
-        // Se preencheu Razão Social, CNPJ e Nome Fantasia devem estar preenchidos
-        if (hasCompanyName && !hasCNPJ) {
-          setFeedback({ type: "error", message: "Se você preencheu a Razão Social, também deve preencher o CNPJ e o Nome Fantasia" });
-          return false;
-        }
-        
-        if (hasCompanyName && !hasTradeName) {
-          setFeedback({ type: "error", message: "Se você preencheu a Razão Social, também deve preencher o CNPJ e o Nome Fantasia" });
-          return false;
-        }
-        
-        // Se preencheu Nome Fantasia, CNPJ e Razão Social devem estar preenchidos
-        if (hasTradeName && !hasCNPJ) {
-          setFeedback({ type: "error", message: "Para preencher o Nome Fantasia, você deve preencher o CNPJ e a Razão Social" });
-          return false;
-        }
-        
-        if (hasTradeName && !hasCompanyName) {
-          setFeedback({ type: "error", message: "Para preencher o Nome Fantasia, você deve preencher o CNPJ e a Razão Social" });
-          return false;
-        }
+        // Limpar erros se tudo estiver ok
+        setCompanyNameError(false);
+        setTradeNameError(false);
+      } else {
+        // Se não tem CNPJ, limpar erros
+        setCompanyNameError(false);
+        setTradeNameError(false);
       }
     }
     // Validações para etapa 4 (dados da loja)
@@ -1539,8 +1692,50 @@ export function CriarRedeView() {
       };
 
       // Adicionar campos opcionais do proprietário se preenchidos
-      if (ownerData.birth_date) ownerPayload.birth_date = ownerData.birth_date;
-      if (ownerData.photo_url) ownerPayload.photo_url = ownerData.photo_url;
+      if (ownerData.birth_date && ownerData.birth_date.trim() !== '') {
+        ownerPayload.birth_date = ownerData.birth_date;
+      }
+      if (ownerData.photo_url && ownerData.photo_url.trim() !== '') {
+        ownerPayload.photo_url = ownerData.photo_url;
+      }
+
+      // Validar campos obrigatórios antes de preparar payload
+      const requiredFields = {
+        name: networkData.name,
+        primary_email: networkData.primary_email,
+        primary_phone: networkData.primary_phone,
+        zip_code: networkData.zip_code,
+        state: networkData.state,
+        city: networkData.city,
+        logo_url: logoUrl,
+        street: networkData.street,
+        street_number: networkData.street_number,
+        neighborhood: networkData.neighborhood,
+      };
+
+      const missingFields: string[] = [];
+      Object.entries(requiredFields).forEach(([key, value]) => {
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          missingFields.push(key);
+        }
+      });
+
+      if (missingFields.length > 0) {
+        const fieldNames: Record<string, string> = {
+          name: 'Nome da rede',
+          primary_email: 'E-mail principal',
+          primary_phone: 'Telefone principal',
+          zip_code: 'CEP',
+          state: 'Estado',
+          city: 'Cidade',
+          logo_url: 'Logo',
+          street: 'Logradouro',
+          street_number: 'Número',
+          neighborhood: 'Bairro',
+        };
+        const missingNames = missingFields.map(f => fieldNames[f] || f).join(', ');
+        throw new Error(`Campos obrigatórios não preenchidos: ${missingNames}. Por favor, preencha todos os campos obrigatórios antes de criar a rede.`);
+      }
 
       // Preparar dados da rede
       const networkPayload: any = {
@@ -1557,48 +1752,428 @@ export function CriarRedeView() {
         neighborhood: networkData.neighborhood!,
       };
 
-      // Adicionar campos opcionais se preenchidos
+      // Adicionar campos opcionais se preenchidos (com validação rigorosa)
       Object.entries(networkData).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '' && 
-            !['name', 'primary_email', 'primary_phone', 'zip_code', 'state', 'city', 'logo_url', 'street', 'street_number', 'neighborhood'].includes(key)) {
-          if (key === 'primary_phone') {
-            networkPayload[key] = String(value).replace(/\D/g, '');
-          } else if (key === 'zip_code') {
-            networkPayload[key] = String(value).replace(/\D/g, '');
-          } else if (key === 'cnpj') {
-            networkPayload[key] = String(value).replace(/\D/g, '');
-          } else {
-            networkPayload[key] = value;
+        // Ignorar campos já adicionados
+        if (['name', 'primary_email', 'primary_phone', 'zip_code', 'state', 'city', 'logo_url', 'street', 'street_number', 'neighborhood'].includes(key)) {
+          return;
+        }
+        
+        // Ignorar valores vazios, null ou undefined
+        if (value === undefined || value === null) {
+          return;
+        }
+        
+        // Processar campos específicos
+        if (key === 'cnpj') {
+          const cleanCNPJ = String(value).replace(/\D/g, '');
+          // Só adicionar se tiver 14 dígitos (CNPJ válido)
+          if (cleanCNPJ.length === 14) {
+            networkPayload[key] = cleanCNPJ;
           }
+          // Se CNPJ não for válido, não adicionar (evita erro de validação)
+        } else if (key === 'company_name') {
+          // Razão Social - só adicionar se CNPJ estiver presente e válido no payload
+          const hasValidCNPJ = networkPayload.cnpj && String(networkPayload.cnpj).replace(/\D/g, '').length === 14;
+          if (hasValidCNPJ && typeof value === 'string' && value.trim() !== '') {
+            networkPayload[key] = value.trim();
+          }
+        } else if (key === 'trade_name') {
+          // Nome Fantasia - só adicionar se CNPJ estiver presente e válido no payload
+          const hasValidCNPJ = networkPayload.cnpj && String(networkPayload.cnpj).replace(/\D/g, '').length === 14;
+          if (hasValidCNPJ && typeof value === 'string' && value.trim() !== '') {
+            networkPayload[key] = value.trim();
+          }
+        } else if (key === 'estimated_store_count' || key === 'monthly_revenue_target' || key === 'avg_employees_per_store' || key === 'fiscal_month_end_day') {
+          // Campos numéricos - converter para número
+          const numValue = typeof value === 'number' ? value : Number(value);
+          if (!isNaN(numValue) && numValue > 0) {
+            networkPayload[key] = numValue;
+          }
+        } else if (key === 'erp_integration') {
+          // Campo booleano
+          networkPayload[key] = Boolean(value);
+        } else if (key === 'tags' && Array.isArray(value) && value.length > 0) {
+          // Array de tags - filtrar vazios
+          const filteredTags = value.filter(tag => tag && typeof tag === 'string' && tag.trim() !== '');
+          if (filteredTags.length > 0) {
+            networkPayload[key] = filteredTags;
+          }
+        } else if (key === 'website' || key === 'photo_url') {
+          // URLs - validar formato básico
+          if (typeof value === 'string' && value.trim() !== '') {
+            const trimmed = value.trim();
+            // Validar formato básico de URL
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('//')) {
+              networkPayload[key] = trimmed;
+            }
+          }
+        } else if (key === 'founded_at' && typeof value === 'string' && value.trim() !== '') {
+          // Data - validar formato
+          const dateValue = value.trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            networkPayload[key] = dateValue;
+          }
+        } else if (typeof value === 'string') {
+          // Strings - apenas se não estiver vazio após trim
+          const trimmed = value.trim();
+          if (trimmed !== '') {
+            networkPayload[key] = trimmed;
+          }
+        } else if (typeof value === 'number' || typeof value === 'boolean') {
+          // Números e booleanos direto
+          networkPayload[key] = value;
         }
       });
 
-      // Criar rede
+      // Validação final: se CNPJ foi adicionado, garantir que company_name também foi adicionado
+      if (networkPayload.cnpj && !networkPayload.company_name) {
+        // Se CNPJ está presente mas company_name não, tentar adicionar se existir em networkData
+        if (networkData.company_name && networkData.company_name.trim() !== '') {
+          networkPayload.company_name = networkData.company_name.trim();
+        } else {
+          // Se não tem company_name, remover CNPJ para evitar erro de validação do schema
+          delete networkPayload.cnpj;
+          // Também remover trade_name se foi adicionado, pois depende do CNPJ
+          if (networkPayload.trade_name) {
+            delete networkPayload.trade_name;
+          }
+        }
+      }
+
+      // Garantir que campos com default no schema sejam incluídos
+      if (networkPayload.currency === undefined) {
+        networkPayload.currency = 'BRL';
+      }
+      if (networkPayload.erp_integration === undefined) {
+        networkPayload.erp_integration = false;
+      }
+
+      // Log para debug (apenas em desenvolvimento)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Payload sendo enviado:', {
+          ...networkPayload,
+          owner: {
+            ...ownerPayload,
+            password: '***',
+            password_confirm: '***',
+          },
+        });
+        console.log('Campos obrigatórios verificados:', {
+          name: !!networkPayload.name,
+          primary_email: !!networkPayload.primary_email,
+          primary_phone: !!networkPayload.primary_phone,
+          zip_code: !!networkPayload.zip_code,
+          state: !!networkPayload.state,
+          city: !!networkPayload.city,
+          logo_url: !!networkPayload.logo_url,
+          street: !!networkPayload.street,
+          street_number: !!networkPayload.street_number,
+          neighborhood: !!networkPayload.neighborhood,
+        });
+      }
+
+      // Preparar payload com dados da loja também
+      const createPayload = {
+        ...networkPayload,
+        store: storeData && Object.keys(storeData).length > 0 ? {
+          name: storeData.name,
+          cnpj: storeData.cnpj,
+          company_name: storeData.company_name,
+          zip_code: storeData.zip_code,
+          state: storeData.state,
+          city: storeData.city,
+          phone: storeData.phone,
+          email: storeData.email,
+          // Campos opcionais da loja
+          ...(storeData.trade_name && { trade_name: storeData.trade_name }),
+          ...(storeData.state_registration && { state_registration: storeData.state_registration }),
+          ...(storeData.municipal_registration && { municipal_registration: storeData.municipal_registration }),
+          ...(storeData.street && { street: storeData.street }),
+          ...(storeData.street_number && { street_number: storeData.street_number }),
+          ...(storeData.address_complement && { address_complement: storeData.address_complement }),
+          ...(storeData.neighborhood && { neighborhood: storeData.neighborhood }),
+          ...(storeData.logo_url && { logo_url: storeData.logo_url }),
+          ...(storeData.internal_code && { internal_code: storeData.internal_code }),
+          ...(storeData.manager_name && { manager_name: storeData.manager_name }),
+        } : undefined,
+      };
+
+      // Criar rede (e primeira loja se fornecida)
       const networkResponse = await fetch('/api/networks/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify(networkPayload),
+        body: JSON.stringify(createPayload),
       });
 
-      const networkResult = await networkResponse.json();
-      if (!networkResponse.ok) {
-        const errorDetails = networkResult.details 
-          ? (Array.isArray(networkResult.details) 
-              ? networkResult.details.map((d: any) => `${d.path || d.path}: ${d.message || d}`).join(', ')
-              : JSON.stringify(networkResult.details))
-          : '';
-        const errorMessage = networkResult.error 
-          + (errorDetails ? ` - Detalhes: ${errorDetails}` : '')
-          + (networkResult.hint ? ` - Dica: ${networkResult.hint}` : '');
-        throw new Error(errorMessage);
+      let networkResult: any = null;
+      let responseText = '';
+      
+      try {
+        responseText = await networkResponse.text();
+        if (responseText && responseText.trim() !== '') {
+          try {
+            networkResult = JSON.parse(responseText);
+          } catch (parseError) {
+            // Se não for JSON válido, criar um objeto de erro básico
+            console.error('Resposta não é JSON válido:', responseText);
+            networkResult = {
+              error: 'Erro interno do servidor',
+              message: `Resposta inválida do servidor (Status ${networkResponse.status})`,
+              details: responseText.substring(0, 200),
+            };
+          }
+        } else {
+          // Resposta vazia - criar objeto de erro básico
+          networkResult = {
+            error: 'Erro interno do servidor',
+            message: `Servidor retornou resposta vazia (Status ${networkResponse.status})`,
+          };
+        }
+      } catch (jsonError: any) {
+        console.error('Erro ao processar resposta:', jsonError);
+        networkResult = {
+          error: 'Erro ao processar resposta',
+          message: `Não foi possível processar a resposta do servidor (Status ${networkResponse.status})`,
+        };
       }
 
-      const networkId = networkResult.data?.id;
+      if (!networkResponse.ok) {
+        // Wrapper de segurança para todo o tratamento de erro
+        let finalErrorMessage = 'Erro interno do servidor';
+        
+        try {
+          // Tratamento especial para rate limiting (429)
+          if (networkResponse.status === 429) {
+          const retryAfter = networkResponse.headers.get('Retry-After') || networkResult?.retryAfter;
+          const retrySeconds = retryAfter ? parseInt(String(retryAfter)) : 900; // 15 minutos padrão
+          
+          // Iniciar cronômetro
+          setRetryCountdown(retrySeconds);
+          
+          const retryMinutes = Math.ceil(retrySeconds / 60);
+          
+          setFeedback({
+            type: "error",
+            message: `Muitas requisições. Por favor, aguarde antes de tentar novamente. Isso acontece para proteger o sistema contra abusos.`,
+            retryAfter: retrySeconds,
+          });
+          
+          throw new Error(
+            `Muitas requisições. Por favor, aguarde ${retryMinutes} minuto${retryMinutes > 1 ? 's' : ''} antes de tentar novamente. ` +
+            `Isso acontece para proteger o sistema contra abusos.`
+          );
+        }
+        
+        // Verificar se networkResult existe e tem a estrutura esperada
+        let errorDetails: string = '';
+        try {
+          if (networkResult && networkResult.details !== undefined && networkResult.details !== null) {
+            // Verificar se details é um array válido
+            if (Array.isArray(networkResult.details)) {
+              // É um array - processar cada item de forma segura
+              if (networkResult.details.length > 0) {
+                try {
+                  // Garantir que todos os itens sejam válidos antes de processar
+                  const validDetails = networkResult.details.filter((d: any) => d !== null && d !== undefined);
+                  
+                  if (validDetails.length > 0) {
+                    // Log para debug em desenvolvimento
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log('Processando detalhes do erro:', validDetails);
+                    }
+                    
+                    const processedDetails = validDetails.map((d: any) => {
+                      try {
+                        if (!d || typeof d !== 'object') {
+                          return String(d || 'erro desconhecido');
+                        }
+                        const path = d.path ? String(d.path) : 'campo';
+                        const message = d.message ? String(d.message) : 'erro desconhecido';
+                        return `${path}: ${message}`;
+                      } catch (itemError: any) {
+                        console.error('Erro ao processar item de details:', itemError, d);
+                        return 'erro ao processar item';
+                      }
+                    }).filter((item: string) => item && typeof item === 'string' && item.trim() !== '');
+                    
+                    if (processedDetails.length > 0) {
+                      errorDetails = processedDetails.join(', ');
+                    } else {
+                      // Se não conseguiu processar, tentar mostrar o array completo
+                      try {
+                        errorDetails = JSON.stringify(validDetails).substring(0, 200);
+                      } catch {
+                        errorDetails = 'Erro ao processar detalhes da validação';
+                      }
+                    }
+                  } else {
+                    // Se validDetails está vazio, tentar usar o array original
+                    try {
+                      errorDetails = JSON.stringify(networkResult.details).substring(0, 200);
+                    } catch {
+                      errorDetails = 'Erro ao processar detalhes da validação';
+                    }
+                  }
+                } catch (mapError: any) {
+                  console.error('Erro ao processar details array:', mapError, networkResult.details);
+                  try {
+                    if (typeof networkResult.details === 'string') {
+                      errorDetails = networkResult.details;
+                    } else {
+                      errorDetails = JSON.stringify(networkResult.details);
+                    }
+                  } catch (stringifyError) {
+                    errorDetails = 'Erro ao processar detalhes do erro';
+                  }
+                }
+              }
+            } else {
+              // Não é um array - tentar converter para string de forma segura
+              try {
+                if (typeof networkResult.details === 'string') {
+                  errorDetails = networkResult.details;
+                } else if (typeof networkResult.details === 'object') {
+                  errorDetails = JSON.stringify(networkResult.details);
+                } else {
+                  errorDetails = String(networkResult.details);
+                }
+              } catch (stringifyError) {
+                errorDetails = 'Erro ao processar detalhes do erro';
+              }
+            }
+          }
+        } catch (detailsError: any) {
+          console.error('Erro ao processar details:', detailsError);
+          errorDetails = '';
+        }
+        
+        // Construir mensagem de erro de forma segura
+        let errorMessage = 'Erro desconhecido';
+        try {
+          const errorParts: string[] = [];
+          
+          if (networkResult?.error) {
+            errorParts.push(String(networkResult.error));
+          } else {
+            errorParts.push('Erro desconhecido');
+          }
+          
+          if (errorDetails && typeof errorDetails === 'string' && errorDetails.trim() !== '') {
+            errorParts.push(`Detalhes: ${errorDetails}`);
+          }
+          
+          if (networkResult?.message && String(networkResult.message).trim() !== '') {
+            errorParts.push(String(networkResult.message));
+          }
+          
+          if (networkResult?.hint && String(networkResult.hint).trim() !== '') {
+            errorParts.push(`Dica: ${networkResult.hint}`);
+          }
+          
+          errorMessage = errorParts.join(' - ');
+        } catch (messageError: any) {
+          console.error('Erro ao construir mensagem de erro:', messageError);
+          errorMessage = networkResult?.error || 'Erro interno do servidor';
+        }
+        
+        // Log detalhado do erro (de forma segura)
+        const errorLog: any = {
+          status: networkResponse.status,
+          statusText: networkResponse.statusText,
+          url: networkResponse.url || '/api/networks/create',
+        };
+        
+        try {
+          if (networkResult) {
+            errorLog.error = networkResult.error;
+            // Não incluir details diretamente se for um array grande ou objeto complexo
+            if (networkResult.details !== undefined && networkResult.details !== null) {
+              if (Array.isArray(networkResult.details)) {
+                errorLog.details = `Array com ${networkResult.details.length} itens`;
+              } else if (typeof networkResult.details === 'string') {
+                errorLog.details = networkResult.details.substring(0, 200); // Limitar tamanho
+              } else {
+                try {
+                  errorLog.details = JSON.stringify(networkResult.details).substring(0, 200);
+                } catch {
+                  errorLog.details = 'Erro ao serializar details';
+                }
+              }
+            }
+            errorLog.message = networkResult.message;
+            errorLog.hint = networkResult.hint;
+            // Não incluir fullResponse completo para evitar problemas de serialização
+            errorLog.hasFullResponse = !!networkResult;
+          } else {
+            errorLog.error = 'Resposta do servidor não contém dados válidos';
+            errorLog.networkResult = null;
+          }
+          
+          errorLog.hasNetworkResult = !!networkResult;
+          errorLog.networkResultType = typeof networkResult;
+        } catch (logError: any) {
+          console.error('Erro ao construir errorLog:', logError);
+          errorLog.logError = 'Erro ao construir log de erro';
+        }
+        
+          console.error('Erro na criação da rede:', errorLog);
+          
+          finalErrorMessage = errorMessage;
+        } catch (errorProcessingError: any) {
+          // Se houver qualquer erro durante o processamento do erro, usar mensagem genérica
+          console.error('Erro ao processar erro da API:', errorProcessingError);
+          finalErrorMessage = `Erro interno do servidor (Status ${networkResponse.status})`;
+        }
+        
+        throw new Error(finalErrorMessage);
+      }
+
+      // Log para debug em desenvolvimento
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Resposta de sucesso recebida:', {
+          status: networkResponse.status,
+          ok: networkResponse.ok,
+          hasData: !!networkResult.data,
+          networkId: networkResult.data?.id,
+          success: networkResult.success,
+          message: networkResult.message,
+          fullResult: networkResult,
+        });
+      }
+
+      // Verificar se a resposta é realmente de sucesso
+      if (!networkResponse.ok) {
+        // Se chegou aqui mas networkResponse.ok é false, isso não deveria acontecer
+        // Mas vamos tratar como erro de qualquer forma
+        throw new Error(`Erro inesperado: Status ${networkResponse.status}`);
+      }
+
+      const networkId = networkResult?.data?.id || networkResult?.id;
       if (!networkId) {
-        throw new Error("Rede criada mas ID não retornado");
+        // Log para debug em desenvolvimento
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Rede criada mas ID não retornado. Resposta completa:", networkResult);
+        }
+        
+        // Mesmo sem ID, se a rede foi criada, mostrar mensagem de sucesso
+        // O usuário pode verificar a lista de redes
+        setCreating(false);
+        setFeedback({ 
+          type: "success", 
+          message: `Rede "${networkData.name}" criada com sucesso! Verifique a lista de redes.` 
+        });
+        
+        // Limpar dados e redirecionar
+        localStorage.removeItem(STORAGE_KEY);
+        await refresh();
+        setTimeout(() => {
+          router.push("/configuracoes/empresas");
+        }, 3000);
+        return;
       }
 
       // TODO: Criar primeira loja também
@@ -1611,36 +2186,80 @@ export function CriarRedeView() {
       });
       setPasswordError(null);
 
-      // Limpar rascunhos
-      localStorage.removeItem(STORAGE_KEY);
-      try {
-        await fetch('/api/networks/draft', {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-        });
-      } catch (e) {
-        // Ignorar erro ao limpar rascunho
-      }
-
-      await refresh();
+      // Exibir feedback de sucesso IMEDIATAMENTE após verificar que a rede foi criada
+      // Isso garante que o usuário veja o feedback mesmo se algo falhar depois
+      setCreating(false);
+      
+      // Exibir feedback de sucesso IMEDIATAMENTE
+      const successMessage = `Rede "${networkData.name}" criada com sucesso! Você pode criar a primeira loja agora.`;
+      console.log('✅ Exibindo feedback de sucesso:', successMessage);
       setFeedback({ 
         type: "success", 
-        message: `Rede "${networkData.name}" criada com sucesso! Você pode criar a primeira loja agora.` 
+        message: successMessage
       });
 
-      // Redirecionar após 2 segundos
+      // Scroll para o topo para garantir que o feedback seja visível
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Limpar rascunhos (não crítico se falhar) - fazer de forma assíncrona para não bloquear
+      Promise.all([
+        (async () => {
+          try {
+            localStorage.removeItem(STORAGE_KEY);
+          } catch (e) {
+            // Ignorar erro ao limpar localStorage
+          }
+        })(),
+        (async () => {
+          try {
+            await fetch('/api/networks/draft', {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+            });
+          } catch (e) {
+            // Ignorar erro ao limpar rascunho - não crítico
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Erro ao limpar rascunho:', e);
+            }
+          }
+        })(),
+        (async () => {
+          try {
+            await refresh();
+          } catch (e) {
+            // Ignorar erro ao atualizar - não crítico, o usuário já viu o feedback
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Erro ao atualizar lista de redes:', e);
+            }
+          }
+        })()
+      ]).catch(() => {
+        // Ignorar erros - não críticos
+      });
+
+      // Redirecionar após 4 segundos para dar mais tempo do usuário ver a mensagem
       setTimeout(() => {
-        router.push("/configuracoes/empresas");
-      }, 2000);
+        try {
+          router.push("/configuracoes/empresas");
+        } catch (e) {
+          // Se o redirecionamento falhar, apenas logar
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Erro ao redirecionar:', e);
+          }
+        }
+      }, 4000);
 
     } catch (error: any) {
       console.error(error);
-      setFeedback({ 
-        type: "error", 
-        message: error.message || "Erro ao criar rede. Tente novamente." 
-      });
+      // Não sobrescrever feedback se já foi definido para rate limiting
+      if (!feedback?.retryAfter) {
+        setFeedback({ 
+          type: "error", 
+          message: error.message || "Erro ao criar rede. Tente novamente." 
+        });
+      }
     } finally {
       setCreating(false);
     }
@@ -1663,7 +2282,7 @@ export function CriarRedeView() {
 
   return (
     <TooltipProvider>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6 px-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -1697,10 +2316,10 @@ export function CriarRedeView() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
-          <div>
+              <div>
                 <h2 className="text-xl font-bold text-gray-900">Criação de Rede</h2>
                 <p className="text-sm text-gray-600">Passo {currentStep + 1} de {TOTAL_STEPS}</p>
-          </div>
+              </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-emerald-600">
                   {Math.round(progress)}%
@@ -1709,22 +2328,22 @@ export function CriarRedeView() {
               </div>
             </div>
             <Progress value={progress} className="h-2 mb-4" />
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {steps.map((step) => {
                 const status = currentStep === step.id ? 'current' : currentStep > step.id ? 'completed' : 'pending';
                 return (
                   <div
                     key={step.id}
                     onClick={() => handleStepClick(step.id)}
-                    className={`flex flex-col items-center p-3 rounded-xl transition-all cursor-pointer hover:scale-105 ${
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl transition-all cursor-pointer hover:scale-105 min-h-[100px] w-full ${
                       status === 'completed' 
-                        ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
+                        ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300' 
                         : status === 'current'
-                        ? 'bg-blue-100 text-blue-700 shadow-lg hover:bg-blue-200'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        ? 'bg-blue-100 text-blue-700 shadow-lg hover:bg-blue-200 border-2 border-blue-400'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-300'
                     }`}
                   >
-                    <div className={`p-2 rounded-full mb-2 ${
+                    <div className={`p-2 rounded-full mb-2 flex-shrink-0 ${
                       status === 'completed' 
                         ? 'bg-emerald-200' 
                         : status === 'current'
@@ -1737,7 +2356,7 @@ export function CriarRedeView() {
                         step.icon
                       )}
                     </div>
-                    <div className="text-xs font-medium text-center">{step.title}</div>
+                    <div className="text-xs font-medium text-center leading-tight">{step.title}</div>
                   </div>
                 );
               })}
@@ -1761,6 +2380,14 @@ export function CriarRedeView() {
             )}
             <div className="flex-1">
               <p className="font-medium">{feedback.message}</p>
+              {feedback.retryAfter && retryCountdown !== null && retryCountdown > 0 && (
+                <div className="mt-3 flex items-center gap-2 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="font-semibold">
+                    Tempo restante: {formatCountdown(retryCountdown)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1768,14 +2395,14 @@ export function CriarRedeView() {
         {/* Step Content */}
         <div className="min-h-[400px]">
           {currentStep === 0 && (
-            <Card>
+            <Card className="w-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User className="w-5 h-5 text-emerald-600" />
                   Dados do Proprietário
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 w-full">
             <div className="space-y-2">
                   <Label htmlFor="owner-full-name">Nome Completo <span className="text-red-500">*</span></Label>
               <Input
@@ -1897,7 +2524,7 @@ export function CriarRedeView() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="owner-birth-date">Data de Nascimento</Label>
+                  <Label htmlFor="owner-birth-date">Data de Nascimento <span className="text-red-500">*</span></Label>
                   <Input
                     key="owner-birth-date-input"
                     id="owner-birth-date"
@@ -1905,21 +2532,27 @@ export function CriarRedeView() {
                     value={ownerData.birth_date || ''}
                     onChange={handleOwnerBirthDate}
                     disabled={creating}
+                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                    min={new Date(new Date().setFullYear(new Date().getFullYear() - 120)).toISOString().split('T')[0]}
+                    className={birthDateError ? "border-red-500 focus-visible:ring-red-500" : ""}
                   />
+                  {birthDateError && (
+                    <p className="text-xs text-red-500">{birthDateError}</p>
+                  )}
                 </div>
 
               </CardContent>
             </Card>
           )}
           {currentStep === 1 && (
-            <Card>
+            <Card className="w-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-emerald-600" />
                   Dados Básicos da Rede
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 w-full">
                 <div className="space-y-2">
                   <Label htmlFor="network-name">Nome da Rede <span className="text-red-500">*</span></Label>
                   <Input
@@ -2016,14 +2649,14 @@ export function CriarRedeView() {
             </Card>
           )}
           {currentStep === 2 && (
-            <Card>
+            <Card className="w-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-emerald-600" />
                   Endereço da Rede
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 w-full">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="zip-code">CEP <span className="text-red-500">*</span></Label>
@@ -2142,142 +2775,148 @@ export function CriarRedeView() {
             </Card>
           )}
           {currentStep === 3 && (
-            <Card>
+            <Card className="w-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-emerald-600" />
                   Informações Adicionais da Rede
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="network-cnpj">CNPJ da Rede</Label>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="w-4 h-4 text-gray-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>CNPJ da rede, se você tiver um CNPJ centralizado. Deixe em branco se cada loja tiver seu próprio CNPJ.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                    <Input
-                      key="network-cnpj-input"
-                      id="network-cnpj"
-                      value={networkData.cnpj || ''}
-                      onChange={handleNetworkCNPJ}
-                      placeholder="00.000.000/0000-00"
-                      disabled={creating}
-                      maxLength={18}
-                      className={cnpjError ? "border-red-500 focus-visible:ring-red-500" : ""}
-                    />
-                    {cnpjError && (
-                      <p className="text-xs text-red-500">Este campo é obrigatório</p>
-                    )}
-                  </div>
+              <CardContent className="space-y-4 w-full">
+                {(() => {
+                  const cnpjDigits = networkData.cnpj ? networkData.cnpj.replace(/\D/g, '') : '';
+                  const isCNPJValid = cnpjDigits.length === 14;
+                  const fieldsDisabled = creating || !isCNPJValid;
+                  
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="network-cnpj">CNPJ da Rede</Label>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Info className="w-4 h-4 text-gray-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>CNPJ da rede, se você tiver um CNPJ centralizado. Caso não possua, deixe em branco.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <Input
+                            key="network-cnpj-input"
+                            id="network-cnpj"
+                            value={networkData.cnpj || ''}
+                            onChange={handleNetworkCNPJ}
+                            placeholder="00.000.000/0000-00"
+                            disabled={creating}
+                            maxLength={18}
+                          />
+                        </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="company-name">Razão Social</Label>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="w-4 h-4 text-gray-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Razão social registrada no CNPJ da rede. Necessário apenas se você informou um CNPJ para a rede.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                    <Input
-                      key="company-name-input"
-                      id="company-name"
-                      value={networkData.company_name || ''}
-                      onChange={handleCompanyName}
-                      placeholder="Razão Social da Rede"
-                      disabled={creating}
-                      maxLength={255}
-                      className={companyNameError ? "border-red-500 focus-visible:ring-red-500" : ""}
-                    />
-                    {companyNameError && (
-                      <p className="text-xs text-red-500">Este campo é obrigatório</p>
-                    )}
-                  </div>
-                </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="company-name">Razão Social</Label>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Info className="w-4 h-4 text-gray-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Necessário apenas se você informou um CNPJ para a rede.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <Input
+                            key="company-name-input"
+                            id="company-name"
+                            value={networkData.company_name || ''}
+                            onChange={handleCompanyName}
+                            placeholder="Razão Social da Rede"
+                            disabled={fieldsDisabled}
+                            maxLength={255}
+                            className={companyNameError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                          />
+                          {companyNameError && (
+                            <p className="text-xs text-red-500">Este campo é obrigatório quando o CNPJ está preenchido</p>
+                          )}
+                        </div>
+                      </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="trade-name">Nome Fantasia</Label>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-gray-400" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Nome comercial diferente da razão social. Ajuda a identificar sua marca nas análises e relatórios.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <Input
-                    key="trade-name-input"
-                    id="trade-name"
-                    value={networkData.trade_name || ''}
-                    onChange={handleTradeName}
-                    placeholder="Nome Fantasia"
-                    disabled={creating}
-                    maxLength={255}
-                    className={tradeNameError ? "border-red-500 focus-visible:ring-red-500" : ""}
-                  />
-                  {tradeNameError && (
-                    <p className="text-xs text-red-500">Este campo é obrigatório</p>
-                  )}
-                </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="trade-name">Nome Fantasia</Label>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Info className="w-4 h-4 text-gray-400" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Necessário apenas se você informou um CNPJ para a rede.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          key="trade-name-input"
+                          id="trade-name"
+                          value={networkData.trade_name || ''}
+                          onChange={handleTradeName}
+                          placeholder="Nome Fantasia"
+                          disabled={fieldsDisabled}
+                          maxLength={255}
+                          className={tradeNameError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        />
+                        {tradeNameError && (
+                          <p className="text-xs text-red-500">Este campo é obrigatório quando o CNPJ está preenchido</p>
+                        )}
+                      </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="state-registration">Inscrição Estadual</Label>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="w-4 h-4 text-gray-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Inscrição estadual da rede. Facilita a emissão de relatórios fiscais e documentos.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                    <Input
-                      key="state-registration-input"
-                      id="state-registration"
-                      value={networkData.state_registration || ''}
-                      onChange={handleStateRegistration}
-                      placeholder="000.000.000.000"
-                      disabled={creating}
-                    />
-                  </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="state-registration">Inscrição Estadual</Label>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Info className="w-4 h-4 text-gray-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Inscrição estadual da rede. Facilita a emissão de relatórios fiscais e documentos.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <Input
+                            key="state-registration-input"
+                            id="state-registration"
+                            value={networkData.state_registration || ''}
+                            onChange={handleStateRegistration}
+                            placeholder="000.000.000.000"
+                            disabled={fieldsDisabled}
+                          />
+                        </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="municipal-registration">Inscrição Municipal</Label>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="w-4 h-4 text-gray-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Inscrição municipal da rede. Necessária para algumas operações e relatórios municipais.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                    <Input
-                      key="municipal-registration-input"
-                      id="municipal-registration"
-                      value={networkData.municipal_registration || ''}
-                      onChange={handleMunicipalRegistration}
-                      placeholder="000000"
-                      disabled={creating}
-                    />
-                  </div>
-                </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="municipal-registration">Inscrição Municipal</Label>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Info className="w-4 h-4 text-gray-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Inscrição municipal da rede. Necessária para algumas operações e relatórios municipais.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <Input
+                            key="municipal-registration-input"
+                            id="municipal-registration"
+                            value={networkData.municipal_registration || ''}
+                            onChange={handleMunicipalRegistration}
+                            placeholder="000000"
+                            disabled={fieldsDisabled}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -2366,14 +3005,14 @@ export function CriarRedeView() {
             </Card>
           )}
           {currentStep === 4 && (
-            <Card>
+            <Card className="w-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Store className="w-5 h-5 text-emerald-600" />
                   Dados da Primeira Loja
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 w-full">
                 <div className="space-y-2">
                   <Label htmlFor="store-name">Nome da Loja <span className="text-red-500">*</span></Label>
                   <Input
@@ -2602,14 +3241,14 @@ export function CriarRedeView() {
             </Card>
           )}
           {currentStep === 5 && (
-            <Card>
+            <Card className="w-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                   Revisão dos Dados
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 w-full">
                 <div className="space-y-4">
                   <div>
                     <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
@@ -2755,7 +3394,7 @@ export function CriarRedeView() {
             <Button
               variant="outline"
               onClick={handlePrevious}
-              disabled={currentStep === 1 || creating}
+              disabled={currentStep === 0 || creating}
               className="flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -2764,11 +3403,11 @@ export function CriarRedeView() {
             
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">
-                Passo {currentStep} de {TOTAL_STEPS}
+                Passo {currentStep + 1} de {TOTAL_STEPS}
               </span>
           </div>
 
-            {currentStep < TOTAL_STEPS ? (
+            {currentStep < TOTAL_STEPS - 1 ? (
               <Button
                 onClick={handleNext}
                 disabled={creating}
