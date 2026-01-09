@@ -66,8 +66,6 @@ interface NetworkFormData {
   municipal_registration?: string;
   website?: string;
   address_complement?: string;
-  secondary_phone?: string;
-  secondary_email?: string;
   founded_at?: string;
   estimated_store_count?: number;
   monthly_revenue_target?: number;
@@ -94,8 +92,6 @@ interface OwnerFormData {
   
   // Campos opcionais
   birth_date?: string;
-  secondary_email?: string;
-  secondary_phone?: string;
   photo_url?: string;
 }
 
@@ -123,8 +119,6 @@ interface StoreFormData {
   neighborhood?: string;
   latitude?: number;
   longitude?: number;
-  secondary_phone?: string;
-  secondary_email?: string;
   opened_at?: string;
   operational_status?: 'ativa' | 'em_construcao' | 'em_reforma' | 'temporariamente_fechada';
   area_sqm?: number;
@@ -232,7 +226,7 @@ async function fetchAddressByCEP(cep: string): Promise<ViaCEPResponse | null> {
 // COMPONENTE PRINCIPAL
 // ============================================
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 6;
 
 const BRAZILIAN_STATES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
@@ -261,7 +255,7 @@ export function CriarRedeView() {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   
-  // Estados para destacar campos obrigatórios em vermelho (Passo 4)
+  // Estados para destacar campos obrigatórios em vermelho (Passo 3)
   const [cnpjError, setCnpjError] = useState(false);
   const [companyNameError, setCompanyNameError] = useState(false);
   const [tradeNameError, setTradeNameError] = useState(false);
@@ -502,19 +496,6 @@ export function CriarRedeView() {
     debouncedSaveToBackend();
   }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
-  const handleOwnerSecondaryEmail = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setOwnerData(prev => ({ ...prev, secondary_email: value || undefined }));
-    debouncedSaveToLocalStorage();
-    debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
-
-  const handleOwnerSecondaryPhone = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = maskPhone(e.target.value);
-    setOwnerData(prev => ({ ...prev, secondary_phone: value || undefined }));
-    debouncedSaveToLocalStorage();
-    debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
   const handleOwnerPassword = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -807,23 +788,7 @@ export function CriarRedeView() {
     debouncedSaveToBackend();
   }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
-  // Handlers para Passo 3: Contatos Adicionais
-
-  const handleSecondaryEmail = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setNetworkData(prev => ({ ...prev, secondary_email: value }));
-    debouncedSaveToLocalStorage();
-    debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
-
-  const handleSecondaryPhone = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = maskPhone(e.target.value);
-    setNetworkData(prev => ({ ...prev, secondary_phone: value }));
-    debouncedSaveToLocalStorage();
-    debouncedSaveToBackend();
-  }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
-
-  // Função para atualizar estados de erro dos campos relacionados (Passo 4)
+  // Função para atualizar estados de erro dos campos relacionados (Passo 3)
   // Os 3 campos são interligados: se um estiver preenchido, os outros dois devem estar preenchidos
   const updateStep4FieldErrors = useCallback((cnpj: string, companyName: string, tradeName: string) => {
     const hasCNPJ = !!(cnpj && cnpj.replace(/\D/g, '').length === 14);
@@ -857,7 +822,7 @@ export function CriarRedeView() {
     }
   }, []);
 
-  // Handlers para Passo 4: Informações Adicionais
+  // Handlers para Passo 3: Informações Adicionais
   const handleNetworkCNPJ = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = maskCNPJ(e.target.value);
     setNetworkData(prev => {
@@ -928,7 +893,7 @@ export function CriarRedeView() {
     debouncedSaveToBackend();
   }, [debouncedSaveToLocalStorage, debouncedSaveToBackend]);
 
-  // Handlers para Passo 5: Dados da Loja
+  // Handlers para Passo 4: Dados da Loja (antigo Passo 5)
   const handleStoreName = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setStoreData(prev => ({ ...prev, name: value }));
@@ -1185,22 +1150,36 @@ export function CriarRedeView() {
         }));
         setLoadingCEP(false);
       } else if (currentStep === 3) {
-        // Passo 3 - quando implementado
+        // Limpar dados de informações adicionais
         setNetworkData(prev => ({
           ...prev,
-          // Campos do passo 3 quando implementado
+          cnpj: '',
+          company_name: '',
+          trade_name: '',
+          state_registration: '',
+          municipal_registration: '',
+          website: '',
+          founded_at: '',
+          estimated_store_count: undefined,
+          monthly_revenue_target: undefined,
+          avg_employees_per_store: undefined,
+          market_segment: undefined,
+          business_model: undefined,
+          currency: 'BRL',
+          fiscal_month_end_day: undefined,
+          primary_bank_code: '',
+          erp_integration: false,
+          erp_type: '',
+          internal_notes: '',
+          tags: undefined,
         }));
+        setCnpjError(null);
+        setCompanyNameError(null);
       } else if (currentStep === 4) {
-        // Passo 4 - quando implementado
-        setNetworkData(prev => ({
-          ...prev,
-          // Campos do passo 4 quando implementado
-        }));
-      } else if (currentStep === 5) {
         // Limpar dados da loja
         setStoreData({});
-      } else if (currentStep === 6) {
-        // Passo 6 (revisão) - não há dados para limpar aqui
+      } else if (currentStep === 5) {
+        // Passo 5 (revisão, antigo Passo 6) - não há dados para limpar aqui
       }
 
       // Salvar após limpar
@@ -1327,8 +1306,8 @@ export function CriarRedeView() {
         return false;
       }
     }
-    // Validações para etapa 4 (informações adicionais)
-    if (currentStep === 4) {
+    // Validações para etapa 3 (informações adicionais)
+    if (currentStep === 3) {
       const cnpjDigits = networkData.cnpj ? networkData.cnpj.replace(/\D/g, '') : '';
       const hasCNPJ = cnpjDigits.length === 14;
       const hasCompanyName = networkData.company_name && networkData.company_name.trim().length > 0;
@@ -1376,8 +1355,8 @@ export function CriarRedeView() {
         }
       }
     }
-    // Validações para etapa 5 (dados da loja)
-    if (currentStep === 5) {
+    // Validações para etapa 4 (dados da loja)
+    if (currentStep === 4) {
       if (!storeData.name || storeData.name.trim().length < 2) {
         setFeedback({ type: "error", message: "Nome da loja é obrigatório" });
         return false;
@@ -1424,8 +1403,8 @@ export function CriarRedeView() {
         return false;
       }
     }
-    // Validações para etapa 6 (revisão) - validar tudo novamente
-    if (currentStep === 6) {
+    // Validações para etapa 5 (revisão) - validar tudo novamente
+    if (currentStep === 5) {
       // Validar rede
       if (!networkData.name || networkData.name.trim().length < 2) {
         setFeedback({ type: "error", message: "Nome da rede é obrigatório" });
@@ -1561,8 +1540,6 @@ export function CriarRedeView() {
 
       // Adicionar campos opcionais do proprietário se preenchidos
       if (ownerData.birth_date) ownerPayload.birth_date = ownerData.birth_date;
-      if (ownerData.secondary_email) ownerPayload.secondary_email = ownerData.secondary_email;
-      if (ownerData.secondary_phone) ownerPayload.secondary_phone = ownerData.secondary_phone.replace(/\D/g, '');
       if (ownerData.photo_url) ownerPayload.photo_url = ownerData.photo_url;
 
       // Preparar dados da rede
@@ -1584,7 +1561,7 @@ export function CriarRedeView() {
       Object.entries(networkData).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '' && 
             !['name', 'primary_email', 'primary_phone', 'zip_code', 'state', 'city', 'logo_url', 'street', 'street_number', 'neighborhood'].includes(key)) {
-          if (key === 'primary_phone' || key === 'secondary_phone') {
+          if (key === 'primary_phone') {
             networkPayload[key] = String(value).replace(/\D/g, '');
           } else if (key === 'zip_code') {
             networkPayload[key] = String(value).replace(/\D/g, '');
@@ -1677,10 +1654,9 @@ export function CriarRedeView() {
     { id: 0, title: "Proprietário", icon: <User className="w-5 h-5" /> },
     { id: 1, title: "Dados Básicos", icon: <Building2 className="w-5 h-5" /> },
     { id: 2, title: "Endereço", icon: <MapPin className="w-5 h-5" /> },
-    { id: 3, title: "Contatos", icon: <Phone className="w-5 h-5" /> },
-    { id: 4, title: "Informações Adicionais", icon: <FileText className="w-5 h-5" /> },
-    { id: 5, title: "Primeira Loja", icon: <Store className="w-5 h-5" /> },
-    { id: 6, title: "Revisão", icon: <CheckCircle2 className="w-5 h-5" /> },
+    { id: 3, title: "Informações Adicionais", icon: <FileText className="w-5 h-5" /> },
+    { id: 4, title: "Primeira Loja", icon: <Store className="w-5 h-5" /> },
+    { id: 5, title: "Revisão", icon: <CheckCircle2 className="w-5 h-5" /> },
   ];
 
   const progress = ((currentStep + 1) / TOTAL_STEPS) * 100;
@@ -1932,34 +1908,6 @@ export function CriarRedeView() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="owner-secondary-email">E-mail Secundário</Label>
-                    <Input
-                      key="owner-secondary-email-input"
-                      id="owner-secondary-email"
-                      type="email"
-                      value={ownerData.secondary_email || ''}
-                      onChange={handleOwnerSecondaryEmail}
-                      placeholder="email2@email.com"
-                      disabled={creating}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="owner-secondary-phone">Telefone Secundário</Label>
-                    <Input
-                      key="owner-secondary-phone-input"
-                      id="owner-secondary-phone"
-                      value={ownerData.secondary_phone || ''}
-                      onChange={handleOwnerSecondaryPhone}
-                      placeholder="(11) 99999-9999"
-                      disabled={creating}
-                      maxLength={15}
-                    />
-                  </div>
-                </div>
-
               </CardContent>
             </Card>
           )}
@@ -2197,64 +2145,6 @@ export function CriarRedeView() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Phone className="w-5 h-5 text-emerald-600" />
-                  Contatos Adicionais da Rede
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="secondary-email">E-mail Secundário</Label>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-gray-400" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>E-mail alternativo. Útil para receber relatórios importantes e notificações críticas.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <Input
-                    key="secondary-email-input"
-                    id="secondary-email"
-                    type="email"
-                    value={networkData.secondary_email || ''}
-                    onChange={handleSecondaryEmail}
-                    placeholder="alternativo@rede.com.br"
-                    disabled={creating}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="secondary-phone">Telefone Secundário</Label>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="w-4 h-4 text-gray-400" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Telefone alternativo de contato. Garante que você seja encontrado mesmo se o telefone principal estiver ocupado.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <Input
-                    key="secondary-phone-input"
-                    id="secondary-phone"
-                    value={networkData.secondary_phone || ''}
-                    onChange={handleSecondaryPhone}
-                    placeholder="(11) 88888-8888"
-                    disabled={creating}
-                    maxLength={15}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          {currentStep === 4 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-emerald-600" />
                   Informações Adicionais da Rede
                 </CardTitle>
@@ -2475,7 +2365,7 @@ export function CriarRedeView() {
               </CardContent>
             </Card>
           )}
-          {currentStep === 5 && (
+          {currentStep === 4 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -2711,7 +2601,7 @@ export function CriarRedeView() {
               </CardContent>
             </Card>
           )}
-          {currentStep === 6 && (
+          {currentStep === 5 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

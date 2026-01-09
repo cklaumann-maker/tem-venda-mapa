@@ -21,8 +21,6 @@ interface PasswordResetEmailData {
   token: string;
 }
 
-import { safeLogger } from './safeLogger';
-
 /**
  * Envia email de convite para novo usuário
  */

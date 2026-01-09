@@ -256,8 +256,6 @@ export const ownerDataSchema = z.object({
   password_confirm: z.string(),
   // Campos opcionais
   birth_date: z.string().date().optional(),
-  secondary_email: z.union([emailSchema, z.literal('')]).optional().transform((val) => val === '' ? undefined : val),
-  secondary_phone: z.string().max(20).trim().optional(),
   photo_url: z.string().url().optional(),
 }).refine((data) => data.password === data.password_confirm, {
   message: "As senhas não coincidem",
@@ -296,10 +294,6 @@ export const createNetworkSchema = z.object({
   
   // Endereço Completo - Complemento (opcional)
   address_complement: z.string().max(100).trim().optional(),
-  
-  // Contatos Adicionais
-  secondary_phone: z.string().max(20).trim().optional(),
-  secondary_email: z.union([emailSchema, z.literal('')]).optional().transform((val) => val === '' ? undefined : val),
   
   // Métricas Operacionais
   founded_at: z.string().date().optional(),
@@ -364,10 +358,6 @@ export const createStoreSchema = z.object({
   neighborhood: z.string().max(100).trim().optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  
-  // Contatos
-  secondary_phone: brazilianPhoneSchema.optional(),
-  secondary_email: emailSchema.optional(),
   
   // Operacionais
   opened_at: z.string().date().optional(),

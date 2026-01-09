@@ -12,10 +12,9 @@
 - ✅ **Migration `add_owner_fields_to_profiles`**: Adicionados campos do proprietário em `profiles`:
   - `cpf` (TEXT, único quando não nulo)
   - `birth_date` (DATE)
-  - `secondary_email` (TEXT)
-  - `secondary_phone` (TEXT)
-  - `whatsapp` (TEXT)
   - `photo_url` (TEXT)
+- ✅ **Migration `remove_secondary_contact_from_profiles`**: Removidos campos secondary_email e secondary_phone (não necessários para proprietários)
+- ✅ **Migration `remove_secondary_contact_from_networks_and_stores`**: Removidos campos secondary_email e secondary_phone das tabelas networks e stores (não mais utilizados)
 
 #### 2. Validação
 - ✅ **`src/lib/validation.ts`**:
@@ -40,7 +39,7 @@
 - ✅ **`src/components/configuracoes/empresas/CriarRedeView.tsx`**:
   - ✅ Adicionado Step 0 para "Dados do Proprietário"
   - ✅ Campos obrigatórios: Nome completo, E-mail, Telefone, CPF
-  - ✅ Campos opcionais: Data de nascimento, E-mail secundário, Telefone secundário, WhatsApp
+  - ✅ Campos opcionais: Data de nascimento, Foto
   - ✅ Validação de CPF no frontend (máscara e validação)
   - ✅ Integração com API atualizada (ownerData incluído no payload)
   - ✅ Handlers para todos os campos do proprietário
@@ -79,9 +78,6 @@
   
   // Opcionais
   birth_date?: string (data válida)
-  secondary_email?: string (email válido)
-  secondary_phone?: string (máx 20 caracteres)
-  whatsapp?: string (máx 20 caracteres)
   photo_url?: string (URL válida)
 }
 ```

@@ -85,12 +85,6 @@ Campos que enriquecem o cadastro mas não são essenciais para criação.
 |-------|------|-----------|
 | `address_complement` | TEXT | Complemento (apto, sala, etc.) |
 
-#### Contatos Adicionais
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `secondary_phone` | TEXT | Telefone secundário |
-| `secondary_email` | TEXT | E-mail secundário |
-
 #### Métricas Operacionais
 | Campo | Tipo | Descrição | Observações |
 |-------|------|-----------|-------------|
@@ -173,12 +167,6 @@ Campos mínimos necessários para criar uma loja válida no sistema.
 | `neighborhood` | TEXT | Bairro | Sim |
 | `latitude` | DECIMAL(10,8) | Latitude para mapas |
 | `longitude` | DECIMAL(11,8) | Longitude para mapas |
-
-#### Contatos
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `secondary_phone` | TEXT | Telefone secundário |
-| `secondary_email` | TEXT | E-mail secundário |
 
 #### Operacionais
 | Campo | Tipo | Descrição | Observações |
@@ -290,16 +278,6 @@ Cada entrada segue este formato:
 - **Tooltip**: "Complemento do endereço (sala, andar, etc.). Facilita a localização."
 - **Motivação**: "Adicione se houver complemento para facilitar a localização."
 
-#### Contatos Adicionais
-
-**`secondary_phone` (Telefone Secundário)**
-- **Tooltip**: "Telefone alternativo de contato. Garante que você seja encontrado mesmo se o telefone principal estiver ocupado."
-- **Motivação**: "Adicione um telefone alternativo para garantir que sua rede seja sempre localizável."
-
-**`secondary_email` (E-mail Secundário)**
-- **Tooltip**: "E-mail alternativo. Útil para receber relatórios importantes e notificações críticas."
-- **Motivação**: "Configure um e-mail alternativo para receber relatórios e alertas importantes."
-
 #### Métricas Operacionais
 
 **`founded_at` (Data de Fundação)**
@@ -407,16 +385,6 @@ Cada entrada segue este formato:
 **`latitude` / `longitude` (Coordenadas)**
 - **Tooltip**: "Coordenadas geográficas da loja. Permite visualização em mapas, análise de alcance e planejamento de entregas."
 - **Motivação**: "Adicione para visualizar sua loja em mapas, analisar alcance de entrega e planejar rotas eficientes."
-
-#### Contatos
-
-**`secondary_phone` (Telefone Secundário)**
-- **Tooltip**: "Telefone alternativo da loja. Garante que clientes sempre consigam entrar em contato."
-- **Motivação**: "Adicione um telefone alternativo para garantir que clientes sempre consigam falar com a loja."
-
-**`secondary_email` (E-mail Secundário)**
-- **Tooltip**: "E-mail alternativo da loja. Útil para receber notificações importantes e relatórios."
-- **Motivação**: "Configure um e-mail alternativo para garantir que relatórios e alertas importantes sejam recebidos."
 
 #### Operacionais
 

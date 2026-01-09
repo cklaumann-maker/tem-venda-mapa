@@ -81,9 +81,6 @@ Implementar um sistema onde **toda rede criada deve ter um proprietário associa
 | `document_type` | TEXT | Tipo de documento (CPF, CNPJ) | Se proprietário for pessoa jurídica |
 | `document_number` | TEXT | Número do documento alternativo | Para casos onde há CNPJ próprio |
 | `address` | JSONB | Endereço completo | Para documentos e comunicação |
-| `secondary_email` | TEXT | E-mail secundário | Backup de comunicação |
-| `secondary_phone` | TEXT | Telefone secundário | Backup de contato |
-| `whatsapp` | TEXT | WhatsApp | Comunicação preferencial |
 | `photo_url` | TEXT | URL da foto | Identificação visual |
 | `bio` | TEXT | Biografia/observações | Contexto adicional |
 | `metadata` | JSONB | Metadados adicionais | Flexibilidade futura |
@@ -126,9 +123,6 @@ ADD COLUMN IF NOT EXISTS birth_date DATE,
 ADD COLUMN IF NOT EXISTS document_type TEXT,
 ADD COLUMN IF NOT EXISTS document_number TEXT,
 ADD COLUMN IF NOT EXISTS address JSONB,
-ADD COLUMN IF NOT EXISTS secondary_email TEXT,
-ADD COLUMN IF NOT EXISTS secondary_phone TEXT,
-ADD COLUMN IF NOT EXISTS whatsapp TEXT,
 ADD COLUMN IF NOT EXISTS photo_url TEXT,
 ADD COLUMN IF NOT EXISTS bio TEXT,
 ADD COLUMN IF NOT EXISTS metadata JSONB;
@@ -225,9 +219,6 @@ Campos obrigatórios:
 Campos opcionais:
 - Data de nascimento
 - Foto
-- E-mail secundário
-- Telefone secundário
-- WhatsApp
 
 #### 4.2. Validação
 - CPF válido

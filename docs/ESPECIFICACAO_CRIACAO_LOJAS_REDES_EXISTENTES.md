@@ -57,7 +57,7 @@ Este documento especifica o processo de criação de **Lojas** para **Redes Exis
 - ❌ `city` (TEXT, obrigatório) - **FALTANDO**
 - ❌ `phone` (TEXT, obrigatório) - **FALTANDO**
 - ❌ `email` (TEXT, obrigatório) - **FALTANDO**
-- ❌ Campos opcionais (internal_code, manager_name, trade_name, state_registration, municipal_registration, street, street_number, address_complement, neighborhood, latitude, longitude, secondary_phone, secondary_email, opened_at, operational_status, area_sqm, employee_count, cash_register_count, business_hours, max_customer_capacity, monthly_revenue_target, estimated_average_ticket, daily_customer_target, pos_code, payment_settings, tags, internal_notes, photos) - **FALTANDO**
+- ❌ Campos opcionais (internal_code, manager_name, trade_name, state_registration, municipal_registration, street, street_number, address_complement, neighborhood, latitude, longitude, opened_at, operational_status, area_sqm, employee_count, cash_register_count, business_hours, max_customer_capacity, monthly_revenue_target, estimated_average_ticket, daily_customer_target, pos_code, payment_settings, tags, internal_notes, photos) - **FALTANDO**
 
 **NOTA IMPORTANTE sobre campos de endereço:**
 - ✅ `street` (Logradouro) - **OBRIGATÓRIO** (já existe no banco)
@@ -129,7 +129,6 @@ Para consulta completa dos campos opcionais, referir-se a `ESPECIFICACAO_CAMPOS_
 
 - **Dados Básicos**: `logo_url`, `internal_code`, `manager_name`, `trade_name`, `state_registration`, `municipal_registration`
 - **Endereço Completo**: `street`, `street_number`, `address_complement`, `neighborhood`, `latitude`, `longitude`
-- **Contatos**: `secondary_phone`, `secondary_email`
 - **Operacionais**: `opened_at`, `operational_status`, `area_sqm`, `employee_count`, `cash_register_count`, `business_hours`, `max_customer_capacity`
 - **Métricas de Performance**: `monthly_revenue_target`, `estimated_average_ticket`, `daily_customer_target`
 - **Financeiro**: `pos_code`, `payment_settings`

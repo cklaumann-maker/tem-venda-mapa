@@ -246,8 +246,6 @@ export async function POST(req: NextRequest) {
     if (networkData.municipal_registration && networkData.municipal_registration.trim() !== '') insertData.municipal_registration = networkData.municipal_registration;
     if (networkData.website && networkData.website.trim() !== '') insertData.website = networkData.website;
     if (networkData.address_complement && networkData.address_complement.trim() !== '') insertData.address_complement = networkData.address_complement;
-    if (networkData.secondary_phone && networkData.secondary_phone.trim() !== '') insertData.secondary_phone = networkData.secondary_phone;
-    if (networkData.secondary_email && networkData.secondary_email.trim() !== '') insertData.secondary_email = networkData.secondary_email;
     if (networkData.founded_at) insertData.founded_at = networkData.founded_at;
     if (networkData.estimated_store_count !== undefined) insertData.estimated_store_count = networkData.estimated_store_count;
     if (networkData.monthly_revenue_target !== undefined) insertData.monthly_revenue_target = networkData.monthly_revenue_target;
@@ -291,7 +289,7 @@ export async function POST(req: NextRequest) {
     const networkId = newNetwork.id;
 
     // Criar perfil do proprietário
-    const cleanCPF = ownerData.cpf.replace(/[^\d]/g, '');
+    // Reutilizar cleanCPF já calculado anteriormente
     const profileInsertData: any = {
       id: ownerUserId,
       full_name: ownerData.full_name,
@@ -304,8 +302,6 @@ export async function POST(req: NextRequest) {
 
     // Adicionar campos opcionais do proprietário
     if (ownerData.birth_date) profileInsertData.birth_date = ownerData.birth_date;
-    if (ownerData.secondary_email) profileInsertData.secondary_email = ownerData.secondary_email;
-    if (ownerData.secondary_phone) profileInsertData.secondary_phone = ownerData.secondary_phone;
     if (ownerData.photo_url) profileInsertData.photo_url = ownerData.photo_url;
 
     const { error: profileError } = await supabaseAdmin
